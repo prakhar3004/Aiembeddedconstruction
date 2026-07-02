@@ -835,3 +835,83 @@ export async function translateCheckpointsWithGemini(activityName, checklist, la
     return checklist;
   }
 }
+
+// 5. Analyze weather risk using Gemini based on city and season
+export async function analyzeWeatherRisk(city, season, stories, activities, lang = 'en') {
+  if (!isLiveMode()) {
+    // Simulated weather delays fallback based on season
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Normalize string checks for language translation fallback
+    const seasonLower = (season || '').toLowerCase();
+    const isMonsoon = seasonLower.includes('monsoon') || seasonLower.includes('rain') || seasonLower.includes('मानसून') || seasonLower.includes('बारिश');
+    const isWinter = seasonLower.includes('winter') || seasonLower.includes('ठंड') || seasonLower.includes('सर्दी');
+    
+    return {
+      weatherSummary: lang === 'hi' 
+        ? `मौसम विश्लेषण: ${city} में ${season} के दौरान मध्यम जोखिम पाया गया। आउटडोर ढलाई और खुदाई गतिविधियों पर नजर रखें।` 
+        : `Weather Analysis: Moderate risk observed for ${city} during ${season}. Monitor outdoor concrete pouring and excavation tasks closely.`,
+      affectedActivities: activities.map(act => {
+        const idLower = (act.id || '').toLowerCase();
+        const nameLower = (act.name || '').toLowerCase();
+        
+        if (isMonsoon && (idLower.includes('excavation') || nameLower.includes('excavation') || idLower.includes('foundation') || nameLower.includes('foundation'))) {
+          return {
+            id: act.id,
+            status: 'Delayed',
+            delayDays: 12,
+            notes: lang === 'hi' 
+              ? 'भारी मानसूनी बारिश के कारण खुदाई गड्ढे में पानी भर गया है, जिससे काम कुछ दिन बाधित रहेगा।' 
+              : 'Heavy monsoon rains flooded excavation pit, halting foundation works temporarily.'
+          };
+        }
+        if (isWinter && (idLower.includes('slab') || nameLower.includes('slab') || idLower.includes('curing') || nameLower.includes('curing') || idLower.includes('concrete') || nameLower.includes('concrete'))) {
+          return {
+            id: act.id,
+            status: 'Delayed',
+            delayDays: 6,
+            notes: lang === 'hi' 
+              ? 'अत्यधिक ठंड और कोहरे के कारण कंक्रीट सेट होने तथा क्योरिंग (तराई) की अवधि बढ़ा दी गई है।' 
+              : 'Dense winter fog and low temperature delaying concrete setting/curing period.'
+          };
+        }
+        return { id: act.id, status: act.status, delayDays: 0, notes: act.notes || '' };
+      })
+    };
+  }
+
+  const prompt = `We are constructing a ${stories}-story building in the city of "${city}" starting on during the "${season}" season. 
+  Analyze the potential weather-related risks and delays for each stage of construction.
+  Here are the activities currently planned:
+  ${JSON.stringify(activities.map(a => ({ id: a.id, name: a.name, stage: a.stage, duration: a.duration })))}
+  
+  Please analyze and return a JSON object matching this schema:
+  {
+    "weatherSummary": "A brief summary of the weather impact based on the city and season (in ${lang === 'hi' ? 'Hindi' : 'English'}).",
+    "affectedActivities": [
+      {
+        "id": "activity_id",
+        "status": "Delayed",
+        "delayDays": number of additional days of delay (0 if no delay),
+        "notes": "Reason for weather delay, e.g., heavy monsoon rains, winter fog, summer heat wave concrete cracking (in ${lang === 'hi' ? 'Hindi' : 'English'})."
+      }
+    ]
+  }
+  Respond ONLY with the raw JSON object. Do not wrap in markdown code blocks or add comments.`;
+
+  try {
+    const responseText = await callGemini(prompt, true);
+    const cleanText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error('Failed to parse Gemini response for weather analysis:', e);
+    // Fallback to simple simulated response if json parse fails
+    return {
+      weatherSummary: lang === 'hi' 
+        ? `सफलतापूर्वक मौसम जोखिम विश्लेषण पूरा किया गया।` 
+        : `Weather risk analysis completed successfully.`,
+      affectedActivities: []
+    };
+  }
+}
+

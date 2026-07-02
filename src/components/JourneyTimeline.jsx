@@ -323,7 +323,7 @@ export default function JourneyTimeline({
             style={{ 
               minWidth: `${timelineWidthPx + 240}px`,
               transition: 'transform 0.5s ease',
-              transform: view3D ? 'perspective(800px) rotateX(15deg) rotateY(-5deg)' : 'none',
+              transform: 'none',
               transformStyle: 'preserve-3d',
               padding: '10px 0 40px'
             }}

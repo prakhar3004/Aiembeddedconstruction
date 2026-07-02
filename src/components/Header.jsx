@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Key, ShieldAlert, ShieldCheck, RefreshCw, Play, Sun, Moon, Menu } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, RefreshCw, CloudRain, Sun, Moon, Menu } from 'lucide-react';
 import { isLiveMode } from '../services/gemini';
 import { LANGUAGES } from '../utils/translationHelper';
 
-export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo, onReset, language, onLanguageChange, currentUser, activeProject }) {
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [tempKey, setTempKey] = useState(apiKey);
+export default function Header({ activities, onLoadDemo, onReset, language, onLanguageChange, currentUser, activeProject }) {
   const [isDark, setIsDark] = useState(true);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -20,38 +18,36 @@ export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo,
     }
   }, [isDark]);
 
-  const handleSaveKey = (e) => {
-    e.preventDefault();
-    onApiKeyChange(tempKey);
-    setShowKeyModal(false);
+  const getOverallProgress = () => {
+    if (!activities || activities.length === 0) return 0;
+    const completed = activities.filter(a => a.status === 'Completed').length;
+    return Math.round((completed / activities.length) * 100);
   };
 
-  const getOverallProgress = () => {
-    const totalCheckpoints = activities.reduce((acc, curr) => acc + (curr.checklist?.length || 0), 0);
-    if (totalCheckpoints === 0) {
-      const total = activities.length;
-      if (total === 0) return 0;
-      const completed = activities.filter(a => a.status === 'Completed').length;
-      return Math.round((completed / total) * 100);
-    }
-    const checkedCheckpoints = activities.reduce((acc, curr) => 
-      acc + (curr.checklist?.filter(item => item.checked).length || 0), 0);
-    return Math.round((checkedCheckpoints / totalCheckpoints) * 100);
-  };
+  const active = isLiveMode();
 
   return (
     <>
-      <header className="header">
-        <div className="header-title-container">
-          <h1>{activeProject?.name || 'Nirmaan Sahayak'}</h1>
-          <div className="header-meta">
-            {activeProject?.plotDetails?.plotArea && (
-              <span className="header-plot-info">
-                📐 {activeProject.plotDetails.plotArea} sq.ft
-              </span>
-            )}
-            <span className="header-progress-label">Progress:</span>
-            <span className="header-progress-value">{getOverallProgress()}%</span>
+      <header className="app-header">
+        <div className="header-brand">
+          <div className="header-logo-wrapper">
+            <span className="header-logo-emoji">🏗️</span>
+          </div>
+          <div>
+            <h1 className="header-title">Nirmaan Sahayak</h1>
+            <p className="header-subtitle">
+              {activeProject ? activeProject.name : (language === 'hi' ? 'नया निर्माण प्रोजेक्ट' : 'New Construction Project')}
+            </p>
+          </div>
+        </div>
+
+        {/* Global Progress Bar */}
+        <div className="header-progress-section">
+          <div style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              <span>{language === 'hi' ? 'कुल निर्माण प्रगति' : 'Total Progress'}</span>
+              <span>{getOverallProgress()}%</span>
+            </div>
             <div className="header-progress-bar">
               <div className="header-progress-fill" style={{ width: `${getOverallProgress()}%` }}></div>
             </div>
@@ -60,16 +56,20 @@ export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo,
 
         <div className="header-actions">
           {/* AI Status — always visible */}
-          <div className="api-config-card" style={{ cursor: 'pointer' }} onClick={() => setShowKeyModal(true)}>
-            {apiKey ? (
+          <div className="api-config-card" style={{ cursor: 'default' }}>
+            {active ? (
               <>
                 <ShieldCheck size={14} style={{ color: 'var(--success)' }} />
-                <span className="header-action-label">AI Live</span>
+                <span className="header-action-label" style={{ color: 'var(--success)' }}>
+                  {language === 'hi' ? 'एआई सक्रिय' : 'AI Active'}
+                </span>
               </>
             ) : (
               <>
                 <ShieldAlert size={14} style={{ color: 'var(--warning)' }} />
-                <span className="header-action-label">Simulator</span>
+                <span className="header-action-label" style={{ color: 'var(--warning)' }}>
+                  {language === 'hi' ? 'सिम्युलेटर' : 'Simulator'}
+                </span>
               </>
             )}
           </div>
@@ -90,15 +90,15 @@ export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo,
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {/* Desktop-only: Simulate & Reset */}
+          {/* Desktop-only: Weather Risk & Reset */}
           <div className="header-desktop-actions">
-            <button className="btn btn-secondary btn-sm" onClick={onLoadDemo} title="Simulate weather delays">
-              <Play size={14} />
-              <span>Simulate Delay</span>
+            <button className="btn btn-secondary btn-sm" onClick={onLoadDemo} title={language === 'hi' ? 'मौसम जोखिम विश्लेषण' : 'Analyze Weather Risk'}>
+              <CloudRain size={14} />
+              <span>{language === 'hi' ? 'मौसम जोखिम' : 'Weather Risk'}</span>
             </button>
             <button className="btn btn-ghost btn-sm" onClick={onReset} title="Reset" style={{ color: 'var(--error)' }}>
               <RefreshCw size={14} />
-              <span>Reset</span>
+              <span>{language === 'hi' ? 'रीसेट' : 'Reset'}</span>
             </button>
           </div>
 
@@ -113,45 +113,11 @@ export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo,
       {showMobileMenu && (
         <div className="header-mobile-dropdown">
           <button className="header-mobile-action" onClick={() => { onLoadDemo(); setShowMobileMenu(false); }}>
-            <Play size={14} /> Simulate Weather Delay
+            <CloudRain size={14} /> {language === 'hi' ? 'मौसम जोखिम विश्लेषण' : 'Analyze Weather Risk'}
           </button>
           <button className="header-mobile-action" onClick={() => { onReset(); setShowMobileMenu(false); }} style={{ color: 'var(--error)' }}>
-            <RefreshCw size={14} /> Reset Project
+            <RefreshCw size={14} /> {language === 'hi' ? 'प्रोजेक्ट रीसेट करें' : 'Reset Project'}
           </button>
-        </div>
-      )}
-
-      {/* API Key Modal */}
-      {showKeyModal && (
-        <div className="modal-overlay" onClick={() => setShowKeyModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' }}>
-                <Key size={20} style={{ color: 'var(--primary)' }} />
-                AI Engine Configuration
-              </h2>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowKeyModal(false)} style={{ fontSize: '16px', fontWeight: 'bold' }}>✕</button>
-            </div>
-            
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              We use advanced predictive analytics models for AI-powered construction scheduling, risk prediction, and custom checklist generation.
-            </p>
-
-            <form onSubmit={handleSaveKey}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="apiKey">AI API Key</label>
-                <input 
-                  type="password" id="apiKey" className="form-input text-mono"
-                  placeholder="Paste your AI Studio API key here..."
-                  value={tempKey} onChange={(e) => setTempKey(e.target.value)}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => { setTempKey(''); onApiKeyChange(''); setShowKeyModal(false); }}>Clear Key</button>
-                <button type="submit" className="btn btn-primary">Save Configuration</button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </>
