@@ -7,7 +7,7 @@ import Checklists from './components/Checklists';
 import AIAdvisor from './components/AIAdvisor';
 import AuthPage from './components/AuthPage';
 import PlotOnboarding from './components/PlotOnboarding';
-import { getApiKey, saveApiKey, predictProjectRisk, generateCustomChecklists, isLiveMode, translateCheckpointsWithGemini, generateAIPredictiveSchedule } from './services/gemini';
+import { getApiKey, saveApiKey, predictProjectRisk, generateCustomChecklists, isLiveMode, translateCheckpointsWithGemini, generateAIPredictiveSchedule, checkServerLiveMode } from './services/gemini';
 import { generateProjectTimeline } from './utils/activityGenerator';
 import { UI_TRANSLATIONS, translateTextFree, translateBatchFree } from './utils/translationHelper';
 import { apiService } from './services/api';
@@ -57,6 +57,9 @@ export default function App() {
   // ─── STARTUP: check token to restore session ───
   useEffect(() => {
     const checkAuth = async () => {
+      // Check if server has API Key configured
+      checkServerLiveMode();
+      
       const token = localStorage.getItem('nirmaan_jwt_token');
       if (token) {
         try {

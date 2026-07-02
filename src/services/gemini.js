@@ -1,73 +1,53 @@
 // Gemini Flash API Integration Service for Nirmaan Sahayak
 
-const DEFAULT_MODEL = 'gemini-1.5-flash';
+let serverLiveMode = false;
 
-// Retrieve API key from localStorage
-export const getApiKey = () => {
-  return localStorage.getItem('nirmaan_gemini_api_key') || '';
-};
-
-// Save API key to localStorage
-export const saveApiKey = (key) => {
-  if (key) {
-    localStorage.setItem('nirmaan_gemini_api_key', key);
-  } else {
-    localStorage.removeItem('nirmaan_gemini_api_key');
+// Check if server is in Live Mode (has API Key configured)
+export const checkServerLiveMode = async () => {
+  try {
+    const response = await fetch('http://localhost:3001/api/ai/config');
+    const data = await response.json();
+    serverLiveMode = !!data.hasApiKey;
+  } catch (err) {
+    serverLiveMode = false;
   }
 };
+
+// Auto-run config check on script load
+checkServerLiveMode();
+
+export const getApiKey = () => '';
+export const saveApiKey = () => {};
 
 // Check if live API calls are configured
 export const isLiveMode = () => {
-  return !!getApiKey();
+  return serverLiveMode;
 };
 
-// Helper for making API calls to Gemini Flash
+// Helper for making API calls to Gemini Flash via backend proxy
 async function callGemini(prompt, isJson = false) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('API Key not configured. Using simulator.');
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_MODEL}:generateContent?key=${apiKey}`;
-
-  const requestBody = {
-    contents: [
-      {
-        parts: [
-          { text: prompt }
-        ]
-      }
-    ]
-  };
-
-  if (isJson) {
-    requestBody.generationConfig = {
-      responseMimeType: 'application/json'
-    };
-  }
-
-  const response = await fetch(url, {
+  const token = localStorage.getItem('nirmaan_jwt_token');
+  const response = await fetch('http://localhost:3001/api/ai/generate', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : ''
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify({ prompt, isJson })
   });
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
-    const errMsg = errData.error?.message || `HTTP ${response.status}`;
+    const errMsg = errData.error || `HTTP ${response.status}`;
     throw new Error(`AI API Error: ${errMsg}`);
   }
 
   const data = await response.json();
-  const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!textContent) {
+  if (!data.text) {
     throw new Error('Empty response received from AI API');
   }
 
-  return textContent;
+  return data.text;
 }
 
 const LANGUAGE_NAMES = {

@@ -483,6 +483,48 @@ app.get('/', (req, res) => {
     </body>
     </html>
   `);
+// ─── AI PROXY ENDPOINTS ───
+app.get('/api/ai/config', (req, res) => {
+  res.json({ hasApiKey: !!process.env.GEMINI_API_KEY });
+});
+
+app.post('/api/ai/generate', authMiddleware, async (req, res) => {
+  const { prompt, isJson } = req.body;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'AI Service is currently unavailable (API key not configured by administrator).' });
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }]
+    };
+    if (isJson) {
+      requestBody.generationConfig = { responseMimeType: 'application/json' };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('Empty response received from Gemini API');
+    }
+    res.json({ text });
+  } catch (err) {
+    console.error('Gemini backend proxy error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Start Server and migrate DB
