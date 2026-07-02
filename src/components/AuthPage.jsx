@@ -227,7 +227,7 @@ export default function AuthPage({ onLogin, language = 'en', onLanguageChange })
   const [loginPassword, setLoginPassword] = useState('');
 
   const [apiBaseInput, setApiBaseInput] = useState(() => {
-    return localStorage.getItem('nirmaan_api_base') || 'http://localhost:3001/api';
+    return localStorage.getItem('nirmaan_api_base') || 'https://nirmansahyak-backend.onrender.com/api';
   });
 
   const handleApiBaseChange = (val) => {

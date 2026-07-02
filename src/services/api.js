@@ -1,5 +1,5 @@
 export const getApiBase = () => {
-  return localStorage.getItem('nirmaan_api_base') || 'http://localhost:3001/api';
+  return localStorage.getItem('nirmaan_api_base') || 'https://nirmansahyak-backend.onrender.com/api';
 };
 
 // Helper to get token
