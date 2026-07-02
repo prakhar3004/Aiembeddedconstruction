@@ -1536,6 +1536,7 @@ p {
 /* ===== AUTH PAGE ===== */
 .auth-wrapper {
   min-height: 100vh;
+  width: 100%;
   display: flex;
   background: linear-gradient(135deg, #0a0c12 0%, #0f1117 40%, #141820 100%);
   font-family: var(--font-sans);
