@@ -1,4 +1,6 @@
-const API_BASE = 'http://localhost:3001/api';
+export const getApiBase = () => {
+  return localStorage.getItem('nirmaan_api_base') || 'http://localhost:3001/api';
+};
 
 // Helper to get token
 const getHeaders = () => {
@@ -14,7 +16,7 @@ const getHeaders = () => {
 
 // Generic request helper
 async function request(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${getApiBase()}${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {
