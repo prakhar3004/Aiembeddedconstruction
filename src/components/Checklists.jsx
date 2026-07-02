@@ -182,7 +182,7 @@ export default function Checklists({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {selectedActivity.checklist && selectedActivity.checklist.length > 0 ? (
                 selectedActivity.checklist.map(item => {
-                  const badge = getCheckpointBadge(item.text);
+                  const badge = getCheckpointBadge(item.originalText || item.text);
                   return (
                     <div 
                       key={item.id} 
