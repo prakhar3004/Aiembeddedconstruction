@@ -481,8 +481,8 @@ app.get('/', (req, res) => {
         <div class="footer">Nirmaan Sahayak v1.0.0 • Secure API Gateway</div>
       </div>
     </body>
-    </html>
-  `);
+    `);
+});
 // ─── AI PROXY ENDPOINTS ───
 app.get('/api/ai/config', (req, res) => {
   res.json({ hasApiKey: !!process.env.GEMINI_API_KEY });
