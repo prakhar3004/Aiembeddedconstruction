@@ -57,6 +57,7 @@
 
 /* Dark Mode — Slate Black + Safety Orange */
 :root.dark, body.dark-theme-active {
+  color-scheme: dark;
   --bg-color: #0f1117;
   --card-bg: #181b23;
   --border-color: #282d3a;
@@ -1637,7 +1638,7 @@ p {
     flex-direction: column;
     height: auto;
     gap: 16px;
-    padding-bottom: 40px;
+    padding-bottom: 90px;
   }
   
   .checklists-container .checklists-sidebar {

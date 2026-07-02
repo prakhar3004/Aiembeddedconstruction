@@ -165,6 +165,14 @@ export default function App() {
     localStorage.setItem('nirmaan_language', language);
   }, [language]);
 
+  useEffect(() => {
+    const viewport = document.querySelector('.content-viewport');
+    if (viewport) {
+      viewport.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
   // ─── Dynamic Project-Wide Translation ───
   useEffect(() => {
     const translateProject = async () => {

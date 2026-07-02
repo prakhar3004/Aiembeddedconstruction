@@ -492,7 +492,7 @@ export default function DashboardOverview({
   const selectedPhase = selectedGroup.phases[activePhaseIndex] || selectedGroup.phases[0];
 
   return (
-    <div>
+    <div style={{ paddingBottom: '90px' }}>
       {/* KPI Cards Row */}
       <div className="grid-4">
         {/* KPI 1 */}
