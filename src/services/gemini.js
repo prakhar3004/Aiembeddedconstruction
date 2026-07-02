@@ -1,11 +1,12 @@
 // Gemini Flash API Integration Service for Nirmaan Sahayak
+import { getApiBase } from './api';
 
 let serverLiveMode = false;
 
 // Check if server is in Live Mode (has API Key configured)
 export const checkServerLiveMode = async () => {
   try {
-    const response = await fetch('http://localhost:3001/api/ai/config');
+    const response = await fetch(`${getApiBase()}/ai/config`);
     const data = await response.json();
     serverLiveMode = !!data.hasApiKey;
   } catch (err) {
@@ -24,10 +25,11 @@ export const isLiveMode = () => {
   return serverLiveMode;
 };
 
-// Helper for making API calls to Gemini Flash via backend proxy
-async function callGemini(prompt, isJson = false, provider = 'groq') {
+// Helper for making AI calls via the backend proxy.
+// Default provider is 'clod' (clod.io — OpenAI-compatible multi-provider gateway).
+async function callGemini(prompt, isJson = false, provider = 'clod') {
   const token = localStorage.getItem('nirmaan_jwt_token');
-  const response = await fetch('http://localhost:3001/api/ai/generate', {
+  const response = await fetch(`${getApiBase()}/ai/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -849,7 +851,7 @@ export async function translateCheckpointsWithGemini(activityName, checklist, la
   `;
   
   try {
-    const rawJson = await callGemini(prompt, true, 'gemini');
+    const rawJson = await callGemini(prompt, true, 'clod');
     return JSON.parse(rawJson);
   } catch (err) {
     console.error("Failed to translate checklist via AI:", err);
@@ -941,11 +943,131 @@ export async function analyzeWeatherRisk(city, season, stories, activities, lang
     console.error('Failed to parse Gemini response for weather analysis:', e);
     // Fallback to simple simulated response if json parse fails
     return {
-      weatherSummary: lang === 'hi' 
-        ? `सफलतापूर्वक मौसम जोखिम विश्लेषण पूरा किया गया।` 
+      weatherSummary: lang === 'hi'
+        ? `सफलतापूर्वक मौसम जोखिम विश्लेषण पूरा किया गया।`
         : `Weather risk analysis completed successfully.`,
       affectedActivities: []
     };
   }
+}
+
+// 6. Procurement Market & Supply-Chain Intelligence (Quantity Surveyor persona)
+// NOTE: order-by dates & quantities are computed deterministically in
+// procurementEngine.js. This call ONLY adds market intelligence (price trend,
+// seasonal supply risk, city-specific sourcing) — the part that truly needs an LLM.
+export async function analyzeProcurementIntelligence(params, procurementItems, lang = 'en') {
+  const { city, season, budget, stories, soilType } = params || {};
+  const langName = LANGUAGE_NAMES[lang] || 'English';
+
+  if (!isLiveMode()) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return simulateProcurementIntelligence(params, procurementItems, lang);
+  }
+
+  const materialList = (procurementItems || []).map(m =>
+    `- ${m.material} (key: "${m.key}") | needed by ${m.requiredByDate} for "${m.requiredForStage}" | recommended order-by ${m.orderByDate} | est. qty ${m.estimatedQtyLabel} | currentStatus: ${m.status}`
+  ).join('\n');
+
+  const prompt = `
+    System Context: You are a Senior Construction Procurement Manager and Chartered Quantity Surveyor (QS) with 20+ years of experience sourcing materials for Indian residential projects. You understand supplier lead times, commodity price cycles, monsoon logistics, and regional supply chains.
+
+    Project Context:
+    - City / Region: ${city || 'India'}
+    - Construction Season: ${season || 'N/A'}
+    - Budget Tier: ${budget || 'Standard'}
+    - Building Configuration: ${stories || 'N/A'}
+    - Soil Type: ${soilType || 'N/A'}
+
+    The site schedule has produced this material procurement plan (dates & quantities are already fixed — DO NOT recompute them):
+    ${materialList}
+
+    Task: Provide sharp, actionable PROCUREMENT INTELLIGENCE so materials never delay the build:
+    1. A crisp executive procurement summary.
+    2. 3-5 high-priority "marketAlerts" — the most delay-prone or price-sensitive items to act on now (mention monsoon sand/aggregate shortages, steel/cement price movement, long-lead made-to-order items like windows/modular kitchen).
+    3. For each material key, give: priceTrend ("rising" | "stable" | "falling"), a one-line seasonalRisk for "${city || 'this region'}" during "${season}", and a one-line practical sourcingTip (vendor booking, bulk timing, quality check).
+
+    Language Constraint:
+    - ALL text values in the JSON output MUST be written in the "${langName}" language, using correct construction procurement terminology.
+
+    Output Format:
+    Return ONLY a raw, valid JSON object matching this schema. No markdown, no commentary.
+    {
+      "summary": "Executive procurement summary in ${langName}",
+      "marketAlerts": ["priority procurement alert 1 in ${langName}", "alert 2 in ${langName}"],
+      "materials": [
+        {
+          "key": "string (must match a material key from the list above)",
+          "priceTrend": "rising" | "stable" | "falling",
+          "seasonalRisk": "one-line seasonal/logistics risk in ${langName}",
+          "sourcingTip": "one-line actionable sourcing tip in ${langName}"
+        }
+      ]
+    }
+  `;
+
+  try {
+    const rawJson = await callGemini(prompt, true);
+    return JSON.parse(rawJson);
+  } catch (error) {
+    console.error('Failed to run live procurement intelligence, falling back:', error);
+    return simulateProcurementIntelligence(params, procurementItems, lang);
+  }
+}
+
+function simulateProcurementIntelligence(params, procurementItems = [], lang = 'en') {
+  const isHi = lang === 'hi';
+  const seasonStr = (params?.season || '').toLowerCase();
+  const isMonsoon = seasonStr.includes('monsoon') || seasonStr.includes('rain') || seasonStr.includes('मानसून') || seasonStr.includes('बारिश');
+
+  // Per-material intelligence defaults (India market, 2020s norms)
+  const TIPS = {
+    steel:   { priceTrend: 'rising',  en: { r: 'Global commodity — rates swing weekly.', t: 'Lock TMT rate with supplier early; buy full structural quantity in one deal.' }, hi: { r: 'वैश्विक कमोडिटी — दरें साप्ताहिक बदलती हैं।', t: 'सप्लायर से TMT दर जल्दी फिक्स करें; पूरा स्ट्रक्चरल स्टील एक साथ बुक करें।' } },
+    cement:  { priceTrend: 'stable',  en: { r: 'Shelf life ~90 days — avoid early over-stocking.', t: 'Order in slab-wise batches; buy PPC for masonry, OPC-53 for RCC.' }, hi: { r: 'शेल्फ लाइफ ~90 दिन — जल्दी ज्यादा स्टॉक न करें।', t: 'स्लैब-वाइज़ बैच में ऑर्डर करें; चिनाई हेतु PPC, RCC हेतु OPC-53।' } },
+    sand:    { priceTrend: isMonsoon ? 'rising' : 'stable', en: { r: isMonsoon ? 'Monsoon mining bans cause acute shortages & price spikes.' : 'Generally available; check silt content.', t: 'Stockpile 2-3 weeks of sand before the rains; verify silt < 3%.' }, hi: { r: isMonsoon ? 'मानसून खनन प्रतिबंध से रेत की भारी कमी व दाम बढ़ते हैं।' : 'सामान्यतः उपलब्ध; गाद जाँचें।', t: 'बारिश से पहले 2-3 सप्ताह की रेत स्टॉक करें; गाद < 3% रखें।' } },
+    aggregate:{ priceTrend: 'stable', en: { r: isMonsoon ? 'Quarry transport slows in heavy rain.' : 'Stable supply.', t: 'Stockpile gitti with sand; it stores well without shelf-life loss.' }, hi: { r: isMonsoon ? 'भारी बारिश में खदान परिवहन धीमा।' : 'आपूर्ति स्थिर।', t: 'रेत के साथ गिट्टी स्टॉक करें; यह बिना खराब हुए टिकती है।' } },
+    bricks:  { priceTrend: 'stable',  en: { r: isMonsoon ? 'Wet clay bricks & rain-halted kilns reduce supply.' : 'Kiln supply normal.', t: 'Book AAC blocks 1 week ahead; inspect for cracks & uniform size.' }, hi: { r: isMonsoon ? 'गीली मिट्टी व वर्षा से भट्टे बंद, आपूर्ति घटती है।' : 'भट्टा आपूर्ति सामान्य।', t: 'AAC ब्लॉक 1 सप्ताह पहले बुक करें; दरार व आकार जाँचें।' } },
+    tiles:   { priceTrend: 'stable',  en: { r: 'Design/stock selection drives the real lead time.', t: 'Finalise tile design 2-3 weeks early; order 10% extra for wastage/breakage.' }, hi: { r: 'डिज़ाइन/स्टॉक चयन ही असली लीड टाइम तय करता है।', t: 'टाइल डिज़ाइन 2-3 सप्ताह पहले तय करें; टूट-फूट हेतु 10% अतिरिक्त लें।' } },
+    windows: { priceTrend: 'stable',  en: { r: 'Made-to-order — 3-4 week fabrication.', t: 'Measure openings right after brickwork; place UPVC order immediately.' }, hi: { r: 'ऑर्डर पर बनता है — 3-4 सप्ताह निर्माण।', t: 'चिनाई के तुरंत बाद नाप लें; UPVC ऑर्डर तुरंत दें।' } },
+    doors:   { priceTrend: 'stable',  en: { r: 'Timber needs seasoning + polish time.', t: 'Order frames early; insist on seasoned, borer-treated wood.' }, hi: { r: 'लकड़ी को सुखाने व पॉलिश हेतु समय चाहिए।', t: 'चौखट जल्दी ऑर्डर करें; सूखी, दीमक-उपचारित लकड़ी लें।' } },
+    joinery: { priceTrend: 'rising',  en: { r: 'Longest finishing lead — custom fabrication.', t: 'Confirm modular kitchen design at plaster stage; use BWR/BWP ply.' }, hi: { r: 'सबसे लंबी फिनिशिंग लीड — कस्टम निर्माण।', t: 'प्लास्टर चरण पर मॉड्यूलर किचन डिज़ाइन तय करें; BWR/BWP प्लाई लें।' } },
+    plumbing:{ priceTrend: 'stable',  en: { r: 'PVC resin prices track crude oil.', t: 'Buy ISI-marked CPVC; order concealed fittings before wall chasing.' }, hi: { r: 'PVC रेज़िन दाम क्रूड ऑयल पर निर्भर।', t: 'ISI CPVC लें; दीवार कटाई से पहले कंसील्ड फिटिंग मंगाएँ।' } },
+    electrical:{ priceTrend: 'rising',en: { r: 'Copper is price-volatile.', t: 'Buy ISI copper wire; order conduits + switchgear before slab conduiting.' }, hi: { r: 'तांबा मूल्य-अस्थिर है।', t: 'ISI तांबा तार लें; स्लैब कंड्यूटिंग से पहले पाइप व स्विचगियर मंगाएँ।' } },
+    paint:   { priceTrend: 'stable',  en: { r: 'Humidity delays putty/paint drying.', t: 'Buy putty + primer first; order finish paint after shade finalised.' }, hi: { r: 'नमी से पुट्टी/पेंट सूखने में देरी।', t: 'पहले पुट्टी+प्राइमर लें; शेड तय होने पर फिनिश पेंट मंगाएँ।' } }
+  };
+
+  const materials = (procurementItems || []).map(m => {
+    const info = TIPS[m.key];
+    if (!info) {
+      return { key: m.key, priceTrend: 'stable', seasonalRisk: isHi ? 'सामान्य आपूर्ति; समय पर बुक करें।' : 'Normal supply; book on time.', sourcingTip: isHi ? 'गुणवत्ता व मात्रा साइट पर सत्यापित करें।' : 'Verify quality & quantity on delivery.' };
+    }
+    const loc = isHi ? info.hi : info.en;
+    return { key: m.key, priceTrend: info.priceTrend, seasonalRisk: loc.r, sourcingTip: loc.t };
+  });
+
+  // Build market alerts from the most urgent + long-lead items
+  const marketAlerts = [];
+  const urgent = (procurementItems || []).filter(m => m.status === 'overdue' || m.status === 'urgent');
+  urgent.slice(0, 3).forEach(m => {
+    marketAlerts.push(isHi
+      ? `${m.material} को ${m.orderByDate} तक ऑर्डर करें — वरना "${m.requiredForStage}" में देरी होगी।`
+      : `Order ${m.material} by ${m.orderByDate} to avoid delaying "${m.requiredForStage}".`);
+  });
+  if (isMonsoon) {
+    marketAlerts.push(isHi
+      ? 'मानसून चेतावनी: रेत व गिट्टी की अग्रिम स्टॉकिंग करें; खनन प्रतिबंध से कमी हो सकती है।'
+      : 'Monsoon alert: pre-stock sand & aggregate — mining bans can cause shortages.');
+  }
+  const longLead = (procurementItems || []).find(m => m.madeToOrder);
+  if (longLead) {
+    marketAlerts.push(isHi
+      ? `लंबी लीड आइटम: ${longLead.material} जैसे मेड-टू-ऑर्डर आइटम जल्दी बुक करें।`
+      : `Long-lead item: book made-to-order items like ${longLead.material} well in advance.`);
+  }
+
+  const summary = isHi
+    ? `${params?.city || 'आपके क्षेत्र'} में ${params?.season || ''} के लिए प्रोक्योरमेंट योजना तैयार है। ${urgent.length} सामग्री पर तुरंत ध्यान दें ताकि निर्माण में देरी न हो।`
+    : `Procurement plan ready for ${params?.city || 'your region'} (${params?.season || 'current season'}). ${urgent.length} material(s) need immediate action to keep the build on schedule.`;
+
+  return { summary, marketAlerts, materials };
 }
 

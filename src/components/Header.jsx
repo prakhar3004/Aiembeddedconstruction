@@ -4,7 +4,7 @@ import { isLiveMode } from '../services/gemini';
 import { LANGUAGES } from '../utils/translationHelper';
 
 export default function Header({ activities, onLoadDemo, onReset, language, onLanguageChange, currentUser, activeProject, projects = [], onSwitchProject }) {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('nirmaan_theme') !== 'light');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   useEffect(() => {
@@ -12,9 +12,11 @@ export default function Header({ activities, onLoadDemo, onReset, language, onLa
     if (isDark) {
       root.classList.add('dark');
       document.body.classList.add('dark-theme-active');
+      localStorage.setItem('nirmaan_theme', 'dark');
     } else {
       root.classList.remove('dark');
       document.body.classList.remove('dark-theme-active');
+      localStorage.setItem('nirmaan_theme', 'light');
     }
   }, [isDark]);
 

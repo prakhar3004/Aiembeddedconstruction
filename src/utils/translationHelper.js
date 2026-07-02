@@ -17,6 +17,7 @@ export const UI_TRANSLATIONS = {
     dashboard: 'Dashboard Overview',
     timeline: 'Construction Timeline',
     checklists: 'Quality Checklists',
+    procurement: 'Procurement',
     advisor: 'AI Advisor & Chat',
     progress: 'Project Progress',
     estimatedDelay: 'AI Estimated Delay',
@@ -75,6 +76,7 @@ export const UI_TRANSLATIONS = {
     dashboard: 'डैशबोर्ड विवरण',
     timeline: 'निर्माण समय-सीमा',
     checklists: 'गुणवत्ता चेकलिस्ट',
+    procurement: 'सामग्री खरीद',
     advisor: 'एआई सलाहकार और चैट',
     progress: 'परियोजना की प्रगति',
     estimatedDelay: 'एआई अनुमानित देरी',
@@ -133,6 +135,7 @@ export const UI_TRANSLATIONS = {
     dashboard: 'Dashboard Overview',
     timeline: 'Construction Timeline',
     checklists: 'Quality Checklists',
+    procurement: 'Procurement',
     advisor: 'AI Advisor & Chat',
     progress: 'Project Progress',
     estimatedDelay: 'AI Estimated Delay',
@@ -1340,36 +1343,49 @@ const CHECKLIST_WORDS = {
 };
 
 // NLP Translation Parser Engine
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Precompile phrase-replacement regexes ONCE (module load), longest keys first so
+// composite phrases (e.g. "Ground Floor (Commercial)") win over their substrings.
+// Escaping prevents crashes on keys containing regex metacharacters like "(M20/M25)".
+const COMPILED_DIC = Object.keys(DIC_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .map(key => ({ val: DIC_WORDS[key], re: new RegExp('\\b' + escapeRegExp(key) + '\\b', 'g') }));
+
+// Memoize results — the same activity/checklist strings render many times.
+const contentCache = new Map();
+
 export function translateContent(text, langCode) {
   if (!text) return '';
   if (langCode === 'en') return text;
 
-  // 1. Direct text translation match in DIC_WORDS
+  const cacheKey = langCode + '::' + text;
+  const cached = contentCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  let result;
+
+  // 1. Direct dictionary matches (fast path for exact activity/stage/item strings)
   const directMatch = DIC_WORDS[text];
-  if (directMatch && directMatch[langCode]) {
-    return directMatch[langCode];
-  }
-
-  // 2. Direct text translation match in CHECKLIST_WORDS
   const checkMatch = CHECKLIST_WORDS[text];
-  if (checkMatch && checkMatch[langCode]) {
-    return checkMatch[langCode];
+  if (directMatch && directMatch[langCode]) {
+    result = directMatch[langCode];
+  } else if (checkMatch && checkMatch[langCode]) {
+    result = checkMatch[langCode];
+  } else {
+    // 2. Phrase-based segment replacement for composite strings (using precompiled regexes)
+    let translatedText = text;
+    for (const { val, re } of COMPILED_DIC) {
+      const rep = val[langCode];
+      if (rep) translatedText = translatedText.replace(re, rep);
+    }
+    result = translatedText;
   }
 
-  // 3. Phrase-based segment replacement (dynamic translation)
-  let translatedText = text;
-  Object.keys(DIC_WORDS).forEach(key => {
-    const val = DIC_WORDS[key];
-    if (val && val[langCode]) {
-      // Use regex to replace exact segments in activity names
-      const regex = new RegExp(`\\b${key}\\b`, 'g');
-      translatedText = translatedText.replace(regex, val[langCode]);
-      // Fallback for non-boundary matches (e.g. at end of strings)
-      translatedText = translatedText.split(key).join(val[langCode]);
-    }
-  });
-
-  return translatedText;
+  contentCache.set(cacheKey, result);
+  return result;
 }
 
 const translationCache = {};

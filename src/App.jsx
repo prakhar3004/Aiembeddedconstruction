@@ -7,11 +7,12 @@ import Checklists from './components/Checklists';
 import AIAdvisor from './components/AIAdvisor';
 import AuthPage from './components/AuthPage';
 import PlotOnboarding from './components/PlotOnboarding';
+import ProcurementIntelligence from './components/ProcurementIntelligence';
 import { getApiKey, saveApiKey, predictProjectRisk, generateCustomChecklists, isLiveMode, translateCheckpointsWithGemini, generateAIPredictiveSchedule, checkServerLiveMode, analyzeWeatherRisk } from './services/gemini';
 import { generateProjectTimeline } from './utils/activityGenerator';
 import { UI_TRANSLATIONS, translateTextFree, translateBatchFree } from './utils/translationHelper';
 import { apiService } from './services/api';
-import { LayoutDashboard, Calendar, ClipboardCheck, Bot } from 'lucide-react';
+import { LayoutDashboard, Calendar, ClipboardCheck, Bot, Truck } from 'lucide-react';
 
 // ─── Helper: date formatting ───
 function formatDate(d) {
@@ -97,6 +98,7 @@ export default function App() {
         setActiveProjectId(null);
         return;
       }
+      checkServerLiveMode();
       try {
         const data = await apiService.getProjects();
         setProjects(data);
@@ -124,6 +126,8 @@ export default function App() {
         setSelectedActivityId(null);
         return;
       }
+
+      checkServerLiveMode();
 
       const proj = projects.find(p => p.id === activeProjectId);
       if (proj) {
@@ -286,7 +290,9 @@ export default function App() {
       soilType: plotDetails.soilType,
       season: plotDetails.season,
       stories: plotDetails.buildingType,
-      budget: plotDetails.budget
+      budget: plotDetails.budget,
+      plotArea: plotDetails.plotArea,
+      city: plotDetails.city
     };
 
     // Run CPM scheduling with the user's chosen start date
@@ -807,6 +813,15 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'procurement' && (
+            <ProcurementIntelligence
+              activities={activities}
+              projectParams={projectParams}
+              activeProject={activeProject}
+              language={language}
+            />
+          )}
+
           {activeTab === 'advisor' && (
             <AIAdvisor
               activeProjectId={activeProjectId}
@@ -833,6 +848,10 @@ export default function App() {
         <button className={`mobile-nav-item ${activeTab === 'checklists' ? 'active' : ''}`} onClick={() => setActiveTab('checklists')}>
           <ClipboardCheck size={20} />
           <span>{UI_TRANSLATIONS[language]?.checklists || 'Checklists'}</span>
+        </button>
+        <button className={`mobile-nav-item ${activeTab === 'procurement' ? 'active' : ''}`} onClick={() => setActiveTab('procurement')}>
+          <Truck size={20} />
+          <span>{UI_TRANSLATIONS[language]?.procurement || 'Material'}</span>
         </button>
         <button className={`mobile-nav-item ${activeTab === 'advisor' ? 'active' : ''}`} onClick={() => setActiveTab('advisor')}>
           <Bot size={20} />

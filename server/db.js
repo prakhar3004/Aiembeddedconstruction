@@ -1,71 +1,68 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+// PostgreSQL data layer for Nirmaan Sahayak (Supabase-compatible).
+// Uses a single connection pool. Connection string comes from DATABASE_URL
+// (Supabase → Project Settings → Database → Connection string / URI).
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, '..', 'nirmaan.db');
+const { Pool } = pg;
 
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Failed to connect to SQLite database:', err.message);
-  } else {
-    console.log('Connected to SQLite database at:', DB_PATH);
-    db.run('PRAGMA foreign_keys = ON;', (err) => {
-      if (err) console.error('Failed to enable foreign keys:', err);
-    });
-  }
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('FATAL: DATABASE_URL is not set. Add your Supabase Postgres connection string to the environment.');
+}
+
+// Supabase (and most managed Postgres) require SSL. Local Postgres does not.
+const isLocal = !!connectionString && /localhost|127\.0\.0\.1/.test(connectionString);
+
+const pool = new Pool({
+  connectionString,
+  ssl: isLocal ? false : { rejectUnauthorized: false },
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
 });
 
-// Promisified DB helpers
-export const dbRun = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
+pool.on('error', (err) => {
+  console.error('Unexpected PostgreSQL pool error:', err.message);
+});
+
+// ─── Promisified query helpers (sqlite-style API kept for minimal route churn) ───
+export const dbRun = async (sql, params = []) => {
+  const res = await pool.query(sql, params);
+  return { changes: res.rowCount, rows: res.rows };
 };
 
-export const dbGet = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+export const dbGet = async (sql, params = []) => {
+  const res = await pool.query(sql, params);
+  return res.rows[0];
 };
 
-export const dbAll = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+export const dbAll = async (sql, params = []) => {
+  const res = await pool.query(sql, params);
+  return res.rows;
 };
 
-// Automatic database schema creation
+// Borrow a dedicated client for multi-statement transactions.
+export const getClient = () => pool.connect();
+
+// ─── Schema creation & lightweight migrations ───
 export async function initDatabase() {
-  console.log('Initializing database tables...');
-  
-  // 1. Users Table
+  console.log('Initializing PostgreSQL tables...');
+
   await dbRun(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
-  // 2. Projects Table
   await dbRun(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       building_type TEXT,
       soil_type TEXT,
@@ -73,19 +70,19 @@ export async function initDatabase() {
       stories TEXT,
       budget TEXT,
       start_date TEXT,
+      plot_area TEXT,
+      city TEXT,
       overall_risk TEXT DEFAULT 'Low',
       estimated_delay_days INTEGER DEFAULT 0,
       risk_summary TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
-  // 3. Activities Table
   await dbRun(`
     CREATE TABLE IF NOT EXISTS activities (
       id TEXT,
-      project_id TEXT,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       original_name TEXT NOT NULL,
       stage TEXT NOT NULL,
@@ -98,57 +95,63 @@ export async function initDatabase() {
       notes TEXT,
       is_addon INTEGER DEFAULT 0,
       sequence_order INTEGER NOT NULL,
-      PRIMARY KEY (id, project_id),
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      PRIMARY KEY (id, project_id)
     )
   `);
 
-  // 4. Checklist Items Table
   await dbRun(`
     CREATE TABLE IF NOT EXISTS checklist_items (
       id TEXT PRIMARY KEY,
       activity_id TEXT NOT NULL,
-      project_id TEXT NOT NULL,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       text TEXT NOT NULL,
       original_text TEXT NOT NULL,
       rule TEXT,
       original_rule TEXT,
       checked INTEGER DEFAULT 0,
-      item_index INTEGER NOT NULL,
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      item_index INTEGER NOT NULL
     )
   `);
 
-  // 5. Chat Logs Table
   await dbRun(`
     CREATE TABLE IF NOT EXISTS chat_logs (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       sender TEXT NOT NULL,
       text TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
-  console.log('Database tables initialized successfully!');
+  // Migrations for databases created before plot_area/city existed
+  await dbRun(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS plot_area TEXT`);
+  await dbRun(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS city TEXT`);
 
-  // Seed default user if not exists
-  try {
-    const defaultEmail = 'buyer@trading.com';
-    const user = await dbGet('SELECT * FROM users WHERE email = ?', [defaultEmail]);
-    if (!user) {
-      console.log('Seeding default user: buyer@trading.com');
-      const hash = await bcrypt.hash('buyer123', 10);
-      await dbRun(
-        'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)',
-        ['default-user-id', 'Prakhar', defaultEmail, hash]
-      );
-      console.log('Default user seeded successfully with password: buyer123');
+  // Helpful indexes for the common lookups
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id)`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_activities_project ON activities(project_id)`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_checklist_project ON checklist_items(project_id)`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_logs(project_id)`);
+
+  console.log('PostgreSQL tables initialized successfully.');
+
+  // Optional demo user — ONLY when explicitly enabled (never a production backdoor).
+  if (process.env.SEED_DEMO_USER === 'true') {
+    try {
+      const demoEmail = 'buyer@trading.com';
+      const existing = await dbGet('SELECT id FROM users WHERE email = $1', [demoEmail]);
+      if (!existing) {
+        const hash = await bcrypt.hash('buyer123', 10);
+        await dbRun(
+          'INSERT INTO users (id, name, email, password_hash) VALUES ($1, $2, $3, $4)',
+          ['demo-user-id', 'Demo User', demoEmail, hash]
+        );
+        console.log('Seeded demo user (SEED_DEMO_USER=true).');
+      }
+    } catch (err) {
+      console.error('Error seeding demo user:', err.message);
     }
-  } catch (err) {
-    console.error('Error seeding default user:', err);
   }
 }
 
-export default db;
+export default pool;

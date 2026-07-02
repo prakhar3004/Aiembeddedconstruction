@@ -29,3 +29,11 @@ yarn-error.log*
 Thumbs.db
 
 .vercel
+
+# Capacitor / Android build artifacts & APKs
+android/
+*.apk
+*.aab
+
+# Scratch / experimental
+scratch/

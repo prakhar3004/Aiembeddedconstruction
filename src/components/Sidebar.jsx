@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Calendar, ClipboardCheck, Bot, HardHat, Plus, Trash2, LogOut, ChevronDown, User, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, Calendar, ClipboardCheck, Bot, HardHat, Plus, Trash2, LogOut, ChevronDown, User, FolderOpen, Truck } from 'lucide-react';
 import { UI_TRANSLATIONS } from '../utils/translationHelper';
 
 export default function Sidebar({
@@ -14,6 +14,7 @@ export default function Sidebar({
     { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard },
     { id: 'timeline', label: t.timeline, icon: Calendar },
     { id: 'checklists', label: t.checklists, icon: ClipboardCheck },
+    { id: 'procurement', label: t.procurement || 'Procurement', icon: Truck },
     { id: 'advisor', label: t.advisor, icon: Bot },
   ];
 
