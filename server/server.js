@@ -491,7 +491,7 @@ app.get('/api/ai/config', (req, res) => {
 
 app.post('/api/ai/generate', authMiddleware, async (req, res) => {
   const { prompt, isJson, provider } = req.body;
-  const selectedProvider = provider || (process.env.GROQ_API_KEY ? 'groq' : 'gemini');
+  const selectedProvider = provider || 'gemini';
 
   if (selectedProvider === 'groq') {
     const apiKey = process.env.GROQ_API_KEY;
@@ -571,7 +571,7 @@ app.post('/api/ai/generate', authMiddleware, async (req, res) => {
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         const requestBody = {
           contents: [{ parts: [{ text: prompt }] }]
         };
