@@ -767,6 +767,8 @@ export default function App() {
           onLanguageChange={setLanguage}
           currentUser={currentUser}
           activeProject={activeProject}
+          projects={projects}
+          onSwitchProject={handleSwitchProject}
         />
 
         <div className="content-viewport">
