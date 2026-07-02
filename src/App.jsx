@@ -526,7 +526,9 @@ export default function App() {
     try {
       await apiService.bulkUpdateActivities(activeProjectId, updatedActivities);
       setActivities(updatedActivities);
-      alert('Demo issues loaded! Check Timeline.');
+      alert(language === 'hi' 
+        ? 'मौसम की देरी का परिदृश्य सफलतापूर्वक लागू किया गया! खुदाई और बुनियादी ढांचे के चरणों में विलंब जोड़ा गया है।' 
+        : 'Weather delay scenario simulated successfully! Delays mapped to excavation and foundation phases.');
     } catch (err) {
       alert(`Failed to load demo data to database: ${err.message}`);
     }

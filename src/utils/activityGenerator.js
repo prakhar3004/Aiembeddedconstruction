@@ -1542,7 +1542,7 @@ const createFloorActivities = (levelName, levelIdx, startDate, params = {}) => {
   ];
 
   let currentDate = new Date(startDate);
-  return activities.map(act => {
+  return baseShellActivities.map(act => {
     const sDate = formatDate(currentDate);
     currentDate = addDays(currentDate, act.duration);
     const eDate = formatDate(currentDate);

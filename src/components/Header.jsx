@@ -92,9 +92,9 @@ export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo,
 
           {/* Desktop-only: Simulate & Reset */}
           <div className="header-desktop-actions">
-            <button className="btn btn-secondary btn-sm" onClick={onLoadDemo} title="Load demo data">
+            <button className="btn btn-secondary btn-sm" onClick={onLoadDemo} title="Simulate weather delays">
               <Play size={14} />
-              <span>Simulate</span>
+              <span>Simulate Delay</span>
             </button>
             <button className="btn btn-ghost btn-sm" onClick={onReset} title="Reset" style={{ color: 'var(--error)' }}>
               <RefreshCw size={14} />
@@ -113,7 +113,7 @@ export default function Header({ apiKey, onApiKeyChange, activities, onLoadDemo,
       {showMobileMenu && (
         <div className="header-mobile-dropdown">
           <button className="header-mobile-action" onClick={() => { onLoadDemo(); setShowMobileMenu(false); }}>
-            <Play size={14} /> Simulate Issues
+            <Play size={14} /> Simulate Weather Delay
           </button>
           <button className="header-mobile-action" onClick={() => { onReset(); setShowMobileMenu(false); }} style={{ color: 'var(--error)' }}>
             <RefreshCw size={14} /> Reset Project

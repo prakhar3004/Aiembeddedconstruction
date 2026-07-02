@@ -493,19 +493,6 @@ export default function DashboardOverview({
 
   return (
     <div>
-      {/* Simulator Mode Alert Banner */}
-      {!isLiveMode() && (
-        <div className="alert alert-warning" style={{ marginBottom: '24px' }}>
-          <AlertTriangle size={18} className="alert-icon" />
-          <div>
-            <strong>{language === 'hi' ? 'सिम्युलेटर मोड सक्रिय:' : 'Simulator Mode Active:'}</strong>{' '}
-            {language === 'hi' 
-              ? 'लाइव एआई भविष्यवाणियां और चेकलिस्ट बनाने के लिए हेडर में अपनी एआई एपीआई की (API Key) जोड़ें। वर्तमान में उच्च गुणवत्ता वाले सिम्युलेटेड उत्तर दिखाए जा रहे हैं।' 
-              : 'Add your AI API key in the header to run live, real-time predictions and checklist generations using AI. Currently displaying high-quality simulated construction responses.'}
-          </div>
-        </div>
-      )}
-
       {/* KPI Cards Row */}
       <div className="grid-4">
         {/* KPI 1 */}
