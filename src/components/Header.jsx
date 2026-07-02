@@ -65,6 +65,14 @@ export default function Header({ activities, onLoadDemo, onReset, language, onLa
             )}
           </div>
 
+          {/* DB Sync Indicator */}
+          <div className="api-config-card" style={{ cursor: 'default', opacity: 0.85, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--success)', display: 'inline-block', boxShadow: '0 0 6px var(--success)' }}></span>
+            <span className="header-action-label" style={{ color: 'var(--text-muted)' }}>
+              {language === 'hi' ? 'डेटा सिंक' : 'Synced'}
+            </span>
+          </div>
+
           {/* Language — always visible */}
           <select
             value={language}

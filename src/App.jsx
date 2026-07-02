@@ -7,7 +7,7 @@ import Checklists from './components/Checklists';
 import AIAdvisor from './components/AIAdvisor';
 import AuthPage from './components/AuthPage';
 import PlotOnboarding from './components/PlotOnboarding';
-import { getApiKey, saveApiKey, predictProjectRisk, generateCustomChecklists, isLiveMode, translateCheckpointsWithGemini, generateAIPredictiveSchedule, checkServerLiveMode } from './services/gemini';
+import { getApiKey, saveApiKey, predictProjectRisk, generateCustomChecklists, isLiveMode, translateCheckpointsWithGemini, generateAIPredictiveSchedule, checkServerLiveMode, analyzeWeatherRisk } from './services/gemini';
 import { generateProjectTimeline } from './utils/activityGenerator';
 import { UI_TRANSLATIONS, translateTextFree, translateBatchFree } from './utils/translationHelper';
 import { apiService } from './services/api';
@@ -53,6 +53,20 @@ export default function App() {
   const [isGeneratingChecklist, setIsGeneratingChecklist] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState(null);
   const [aiQuery, setAiQuery] = useState('');
+
+  // ─── TOAST NOTIFICATION STATE ───
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+  };
+  useEffect(() => {
+    if (toast.show) {
+      const timer = setTimeout(() => {
+        setToast(prev => ({ ...prev, show: false }));
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast.show]);
 
   // ─── STARTUP: check token to restore session ───
   useEffect(() => {
@@ -338,7 +352,7 @@ export default function App() {
       setActiveProjectId(newProj.id);
       setShowOnboarding(false);
     } catch (err) {
-      alert(`Failed to save project: ${err.message}`);
+      showToast(`Failed to save project: ${err.message}`, 'error');
     }
   };
 
@@ -364,7 +378,7 @@ export default function App() {
         setActiveProjectId(remaining.length > 0 ? remaining[0].id : null);
       }
     } catch (err) {
-      alert(`Delete failed: ${err.message}`);
+      showToast(`Delete failed: ${err.message}`, 'error');
     }
   };
 
@@ -435,7 +449,7 @@ export default function App() {
       const data = await apiService.getProjects();
       setProjects(data);
     } catch (err) {
-      alert(`Analysis error: ${err.message}`);
+      showToast(`Analysis error: ${err.message}`, 'error');
     } finally {
       setIsAnalyzing(false);
     }
@@ -511,29 +525,109 @@ export default function App() {
 
       setActivities(scheduledActivities);
       setSelectedActivityId(scheduledActivities[0]?.id || null);
-      alert(`AI Scheduler: ${scheduledActivities.length} activities ka date calculate ho gaya!`);
+      showToast(
+        language === 'hi' 
+          ? `एआई शेड्यूलर: ${scheduledActivities.length} गतिविधियों का दिनांक सफलतापूर्वक निर्धारित किया गया!` 
+          : `AI Scheduler: Schedule generated for ${scheduledActivities.length} activities successfully!`,
+        'success'
+      );
     } catch (err) {
-      alert(`AI Scheduler error: ${err.message}`);
+      showToast(`AI Scheduler error: ${err.message}`, 'error');
     } finally {
       setIsGeneratingChecklist(false);
     }
   };
 
   const loadDemoData = async () => {
-    const updatedActivities = activities.map(act => {
-      if (act.id === 'excavation' || act.id?.includes('excavation')) return { ...act, status: 'Delayed', notes: 'Heavy monsoon rains flooded excavation pit.' };
-      if (act.id === 'planning' || act.id?.includes('sbc')) return { ...act, status: 'Completed', notes: 'Approved.' };
-      return act;
-    });
-
+    if (!activeProjectId) return;
+    setIsGeneratingChecklist(true);
     try {
-      await apiService.bulkUpdateActivities(activeProjectId, updatedActivities);
-      setActivities(updatedActivities);
-      alert(language === 'hi' 
-        ? 'मौसम की देरी का परिदृश्य सफलतापूर्वक लागू किया गया! खुदाई और बुनियादी ढांचे के चरणों में विलंब जोड़ा गया है।' 
-        : 'Weather delay scenario simulated successfully! Delays mapped to excavation and foundation phases.');
+      const city = projectParams.city || 'Indore';
+      const season = projectParams.season || 'Monsoon';
+      const stories = projectParams.stories || '1';
+      
+      const weatherResult = await analyzeWeatherRisk(city, season, stories, activities, language);
+      
+      // Map affected activities
+      const affectedMap = {};
+      (weatherResult.affectedActivities || []).forEach(item => {
+        affectedMap[item.id] = item;
+      });
+      
+      let datesNeedRecalculation = false;
+      
+      const updatedActivities = activities.map(act => {
+        const affected = affectedMap[act.id];
+        if (affected && affected.status === 'Delayed') {
+          datesNeedRecalculation = true;
+          // Increase duration by delayDays
+          const delayDays = parseInt(affected.delayDays, 10) || 0;
+          const originalDuration = parseInt(act.duration, 10) || 1;
+          const newDuration = originalDuration + delayDays;
+          
+          return {
+            ...act,
+            status: 'Delayed',
+            duration: newDuration,
+            notes: affected.notes || (language === 'hi' ? 'खराब मौसम के कारण विलंब।' : 'Delayed due to adverse weather.')
+          };
+        }
+        return act;
+      });
+
+      // Recalculate schedule sequential dates if any duration changed
+      let finalActivities = updatedActivities;
+      if (datesNeedRecalculation) {
+        const projectStartDate = activeProject?.start_date || formatDate(new Date());
+        let currentPtr = new Date(projectStartDate);
+        
+        finalActivities = updatedActivities.map(act => {
+          const sDate = formatDate(currentPtr);
+          const dur = parseInt(act.duration, 10) || 1;
+          const endD = new Date(currentPtr);
+          endD.setDate(endD.getDate() + dur);
+          const eDate = formatDate(endD);
+          
+          // Next activity starts next day
+          currentPtr = new Date(endD);
+          currentPtr.setDate(currentPtr.getDate() + 1);
+          
+          return {
+            ...act,
+            startDate: sDate,
+            endDate: eDate
+          };
+        });
+      }
+
+      await apiService.bulkUpdateActivities(activeProjectId, finalActivities);
+      setActivities(finalActivities);
+      
+      // Update overall project risk summary based on the weather analysis summary
+      if (weatherResult.weatherSummary) {
+        const totalDelay = (weatherResult.affectedActivities || []).reduce((acc, curr) => acc + (parseInt(curr.delayDays, 10) || 0), 0);
+        const newRisk = {
+          overallRisk: totalDelay > 10 ? 'High' : totalDelay > 0 ? 'Medium' : 'Low',
+          estimatedDelayDays: totalDelay,
+          summary: weatherResult.weatherSummary
+        };
+        setRiskAssessment(prev => ({
+          ...prev,
+          ...newRisk
+        }));
+        await apiService.updateProjectRisk(activeProjectId, newRisk);
+      }
+      
+      showToast(
+        language === 'hi' 
+          ? `मौसम जोखिम विश्लेषण पूरा हुआ! ${weatherResult.weatherSummary}` 
+          : `Weather risk analysis completed! ${weatherResult.weatherSummary}`,
+        'success'
+      );
     } catch (err) {
-      alert(`Failed to load demo data to database: ${err.message}`);
+      showToast(`Weather analysis failed: ${err.message}`, 'error');
+    } finally {
+      setIsGeneratingChecklist(false);
     }
   };
 
@@ -549,8 +643,12 @@ export default function App() {
       setRiskAssessment({ overallRisk: 'Low', estimatedDelayDays: 0, summary: '', criticalPathRisks: [], recommendations: [] });
       setSelectedActivityId(initialActs[0]?.id || null);
       await apiService.updateProjectRisk(activeProjectId, { overallRisk: 'Low', estimatedDelayDays: 0, summary: '' });
+      showToast(
+        language === 'hi' ? 'प्रोजेक्ट डेटा सफलतापूर्वक रीसेट किया गया!' : 'Project data reset successfully!', 
+        'info'
+      );
     } catch (err) {
-      alert(`Failed to reset activities on database: ${err.message}`);
+      showToast(`Failed to reset activities: ${err.message}`, 'error');
     }
   };
 
@@ -665,6 +763,18 @@ export default function App() {
           <span>{UI_TRANSLATIONS[language]?.advisor || 'AI Chat'}</span>
         </button>
       </div>
+
+      {/* Toast Notification overlay */}
+      {toast.show && (
+        <div className={`toast-notification ${toast.type}`}>
+          <div className="toast-content">
+            <span className="toast-icon">
+              {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}
+            </span>
+            <span className="toast-message">{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

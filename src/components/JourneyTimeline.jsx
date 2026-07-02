@@ -154,12 +154,13 @@ export default function JourneyTimeline({
     const columns = [];
     const currentDate = new Date(timelineMinDate);
     let lastMonth = -1;
+    let lastLabelIndex = -999;
 
     for (let i = 0; i < totalDays; i++) {
       const month = currentDate.getMonth();
       const isStartOfMonth = month !== lastMonth || i === 0;
 
-      if (isStartOfMonth || scaleMode === 'month') {
+      if ((isStartOfMonth && (i - lastLabelIndex >= 14 || lastLabelIndex === -999)) || scaleMode === 'month') {
         const monthLabel = currentDate.toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', { month: 'short', year: '2-digit' });
         columns.push(
           <div 
@@ -181,6 +182,7 @@ export default function JourneyTimeline({
           </div>
         );
         lastMonth = month;
+        lastLabelIndex = i;
       }
       currentDate.setDate(currentDate.getDate() + 1);
     }
@@ -579,7 +581,7 @@ export default function JourneyTimeline({
                                           boxShadow: 'inset 0 -3px 0 rgba(0,0,0,0.15)'
                                         }}
                                       >
-                                        {act.status === 'Completed' ? '✓ ' : ''}{Math.max(1, Math.round(actWidth / dayWidth))} days
+                                        {act.status === 'Completed' ? '✓ ' : ''}{Math.max(1, Math.round(actWidth / dayWidth))}d
                                       </div>
                                     )}
                                   </div>
