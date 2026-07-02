@@ -25,7 +25,7 @@ export const isLiveMode = () => {
 };
 
 // Helper for making API calls to Gemini Flash via backend proxy
-async function callGemini(prompt, isJson = false) {
+async function callGemini(prompt, isJson = false, provider = 'groq') {
   const token = localStorage.getItem('nirmaan_jwt_token');
   const response = await fetch('http://localhost:3001/api/ai/generate', {
     method: 'POST',
@@ -33,7 +33,7 @@ async function callGemini(prompt, isJson = false) {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : ''
     },
-    body: JSON.stringify({ prompt, isJson })
+    body: JSON.stringify({ prompt, isJson, provider })
   });
 
   if (!response.ok) {
@@ -828,7 +828,7 @@ export async function translateCheckpointsWithGemini(activityName, checklist, la
   `;
   
   try {
-    const rawJson = await callGemini(prompt, true);
+    const rawJson = await callGemini(prompt, true, 'gemini');
     return JSON.parse(rawJson);
   } catch (err) {
     console.error("Failed to translate checklist via AI:", err);
