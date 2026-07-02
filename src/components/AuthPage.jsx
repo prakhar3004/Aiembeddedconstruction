@@ -58,7 +58,7 @@ export default function AuthPage({ onLogin }) {
   return (
     <div className="auth-wrapper">
       {/* Left Brand Panel */}
-      <div className="auth-brand-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="auth-brand-panel">
         <div className="brand-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', textAlign: 'center', marginBottom: '24px' }}>
           <img src="/app_icon.png" alt="Nirmaan Sahayak App Icon" style={{ width: '100px', height: '100px', borderRadius: '20px', border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 16px rgba(0,0,0,0.2)' }} />
           <h1 style={{ fontSize: '26px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>Nirmaan Sahayak</h1>
@@ -89,6 +89,13 @@ export default function AuthPage({ onLogin }) {
       {/* Right Form Panel */}
       <div className="auth-form-panel">
         <div className="auth-form-container">
+          <div className="auth-mobile-logo">
+            <img src="/app_icon.png" alt="Nirmaan Sahayak App Icon" style={{ width: '64px', height: '64px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }} />
+            <h2 style={{ fontSize: '22px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.5px', margin: '12px 0 0 0', color: '#ffffff' }}>Nirmaan Sahayak</h2>
+            <p style={{ fontSize: '13px', color: '#9ca3af', marginTop: '8px', lineHeight: 1.5, textAlign: 'center', marginBottom: '16px' }}>
+              AI-powered construction journey planner — apne sapnon ka ghar banayein, step by step, ek experienced engineer ki madad se.
+            </p>
+          </div>
           <div className="auth-tabs">
             <button 
               className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
