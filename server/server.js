@@ -77,6 +77,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
+  console.log(`[LOGIN ATTEMPT] email: "${email}", password_len: ${password ? password.length : 0}`);
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
@@ -496,7 +497,7 @@ app.post('/api/ai/generate', authMiddleware, async (req, res) => {
   }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const requestBody = {
       contents: [{ parts: [{ text: prompt }] }]
     };
