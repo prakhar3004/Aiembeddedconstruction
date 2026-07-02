@@ -28,29 +28,20 @@ export default function Header({ activities, onLoadDemo, onReset, language, onLa
 
   return (
     <>
-      <header className="app-header">
-        <div className="header-brand">
-          <div className="header-logo-wrapper">
-            <span className="header-logo-emoji">🏗️</span>
+      <header className="header">
+        <div className="header-title-container">
+          <h1>{activeProject ? activeProject.name : (language === 'hi' ? 'नया निर्माण प्रोजेक्ट' : 'Nirmaan Sahayak')}</h1>
+          <div className="header-meta">
+            {activeProject?.plotDetails?.plotArea && (
+              <span className="header-plot-info">
+                📐 {activeProject.plotDetails.plotArea} sq.ft
+              </span>
+            )}
+            <span className="header-progress-label">{language === 'hi' ? 'प्रगति:' : 'Progress:'}</span>
+            <span className="header-progress-value">{getOverallProgress()}%</span>
           </div>
-          <div>
-            <h1 className="header-title">Nirmaan Sahayak</h1>
-            <p className="header-subtitle">
-              {activeProject ? activeProject.name : (language === 'hi' ? 'नया निर्माण प्रोजेक्ट' : 'New Construction Project')}
-            </p>
-          </div>
-        </div>
-
-        {/* Global Progress Bar */}
-        <div className="header-progress-section">
-          <div style={{ width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              <span>{language === 'hi' ? 'कुल निर्माण प्रगति' : 'Total Progress'}</span>
-              <span>{getOverallProgress()}%</span>
-            </div>
-            <div className="header-progress-bar">
-              <div className="header-progress-fill" style={{ width: `${getOverallProgress()}%` }}></div>
-            </div>
+          <div className="header-progress-bar">
+            <div className="header-progress-fill" style={{ width: `${getOverallProgress()}%` }}></div>
           </div>
         </div>
 
