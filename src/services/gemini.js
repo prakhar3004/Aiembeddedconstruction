@@ -80,31 +80,40 @@ export async function predictProjectRisk(activities, lang = 'en') {
   ).join('\n---\n');
 
   const prompt = `
-    You are an expert construction scheduler and civil engineer project manager with 15+ years experience.
-    Analyze the following construction timeline and identify risks, delay forecasts, and path impacts.
+    System Context: You are a principal Project Controls Manager, Chartered Structural Engineer, and Senior Construction Risk Auditor with 20+ years of active field experience in major infrastructure and residential housing projects.
+    
+    Task: Conduct a rigorous Critical Path Method (CPM) delay analysis and risk forecast for a residential construction project based on the tracking logs below.
     
     Current Construction Timeline Details:
     ${activityDataText}
     
-    Please provide a risk and delay analysis in structured JSON format. You MUST return ONLY the JSON object matching this schema. Do not put markdown blocks like \`\`\`json around the JSON.
+    Instructions:
+    1. Evaluate how delayed tasks impact succeeding stages and calculate the overall cascade delay.
+    2. Write a highly professional engineering executive summary.
+    3. Detail risk descriptions and path ripple impacts.
+    4. Provide actionable, high-fidelity site remedial measures (e.g. accelerating curing using hardening admixtures, increasing labor count, rescheduling parallel activities).
     
-    CRITICAL: You MUST write all the text values (including "summary", "riskDescription", "impact", and "recommendations") inside the JSON in the "${langName}" language.
+    Language Constraint:
+    - All text values in the JSON output (like "summary", "riskDescription", "impact", and "recommendations") MUST be written strictly in the "${langName}" language (use formal and technically accurate vocabulary in ${langName}).
+    
+    Output Format:
+    Return ONLY a raw, valid JSON object matching the schema below. Do not wrap in markdown code blocks or add comments.
     
     JSON Schema:
     {
       "overallRisk": "Low" | "Medium" | "High",
       "estimatedDelayDays": number,
-      "summary": "string explaining the project delay forecast and root cause analysis in 2-3 sentences written in ${langName}.",
+      "summary": "A concise, technical summary of project health, forecasting path bottlenecks and primary delay causes in ${langName}.",
       "criticalPathRisks": [
         {
-          "activityId": "string (matching an activity ID)",
-          "riskDescription": "string detailing what is going wrong written in ${langName}",
-          "impact": "string detailing the ripple effect on subsequent stages written in ${langName}"
+          "activityId": "string (matching an activity ID from the input list)",
+          "riskDescription": "Detailed engineering description of the delay or structural block in ${langName}",
+          "impact": "Ripple effect on succeeding stages and date shift implications in ${langName}"
         }
       ],
       "recommendations": [
-        "string action item 1 written in ${langName}",
-        "string action item 2 written in ${langName}"
+        "Actionable site-remedial engineering measure 1 in ${langName}",
+        "Actionable site-remedial engineering measure 2 in ${langName}"
       ]
     }
   `;
@@ -132,24 +141,33 @@ export async function generateCustomChecklists(params, activities, lang = 'en') 
   const activityListText = activities.map(a => `- ${a.name} (ID: ${a.id})`).join('\n');
 
   const prompt = `
-    You are an elite Quality Assurance & Quality Control (QA/QC) construction engineer, professional residential architect, and interior designer with 15+ years experience.
-    We are planning a home construction project with these configuration parameters:
-    - Soil Type: ${soilType}
-    - Construction Start Season: ${season}
-    - Building Structure/Size: ${stories}
-    - Budget Tier: ${budget}
+    System Context: You are a principal QA/QC (Quality Assurance / Quality Control) Construction Audit Director, Senior Structural Engineer, and Space Planner with 20+ years of active field experience in residential housing projects.
     
-    Here is the list of activities planned for this project:
+    Task: Customize and generate a highly rigorous, site-specific quality assurance checklist matching IS codes (Indian Standard Codes) and best engineering practices for the list of project activities.
+    
+    Site & Project Parameters:
+    - Soil Type: ${soilType} (Adjust foundations: e.g. Black Cotton Soil requires under-reamed piles or sand backfilling, Hard Murrum requires typical isolated footings).
+    - Construction Start Season: ${season} (Adjust curing & concrete casting instructions based on climate).
+    - Building Structure/Size: ${stories}
+    - Budget Tier: ${budget} (Standard vs Luxury finishes and inspection intervals).
+    
+    Activities list to audit:
     ${activityListText}
     
-    For each activity in the list, you MUST generate exactly 3 highly rigorous, industry-standard checklists (representing Civil, Architectural, and Interior Designer checks).
-    Each checklist item must contain:
-    1. "text": Specific quality/standard check.
-    2. "rule": Specific engineering standard, Indian Standard Code (e.g. IS 456, IS 1905, IS 1200), concrete mix ratios, curing days, tolerance limits, or thickness parameters.
+    Instructions for generating Checklist Items:
+    For each activity ID in the input list, you MUST generate exactly 3 highly rigorous checkpoints:
+    1. Civil Engineering check (e.g., compaction, rebar detailing, concrete mix design, water-cement ratios, slump test, cover block verification, curing duration).
+    2. Architectural check (e.g., dimensional accuracy, setbacks, ventilation, column alignment, room heights, door/window frame clearance).
+    3. Interior Finishing check (e.g., surface preparation, plastering verticality, plumbing pressure tests, waterproofing gradient, electrical conduit routing, paint priming).
     
-    CRITICAL: All textual descriptions ("text" and "rule") inside the JSON MUST be written in the "${langName}" language.
+    Quality Reference Constraints:
+    - In the "rule" field, you MUST quote specific Indian Standard Codes (e.g., IS 456 for concrete, IS 1905 for masonry, IS 1200 for measurement, IS 269 for cement) and technical specs.
     
-    You MUST return ONLY the JSON object matching this schema. Do not put markdown blocks like \`\`\`json.
+    Language Constraint:
+    - All text values in the JSON output ("text" and "rule" fields) MUST be written in the "${langName}" language. Use formal civil engineering terminology.
+    
+    Output Format:
+    Return ONLY a raw, valid JSON object matching the schema below. Do not wrap in markdown code blocks.
     
     JSON Schema:
     {
@@ -158,16 +176,16 @@ export async function generateCustomChecklists(params, activities, lang = 'en') 
           "activityId": "string (matching the exact activity ID from the input list)",
           "checkpoints": [
             {
-              "text": "string (Civil check detail) in ${langName}",
-              "rule": "string (Civil standard/IS code) in ${langName}"
+              "text": "Civil QA check detail in ${langName}",
+              "rule": "IS Code or technical concrete standard in ${langName}"
             },
             {
-              "text": "string (Architect check detail) in ${langName}",
-              "rule": "string (Architectural rule/bylaw) in ${langName}"
+              "text": "Architectural alignment check detail in ${langName}",
+              "rule": "Architectural bylaw or dimensional standard in ${langName}"
             },
             {
-              "text": "string (Interior check detail) in ${langName}",
-              "rule": "string (Interior standard/finishing rule) in ${langName}"
+              "text": "Interior finishing/MEP QA check detail in ${langName}",
+              "rule": "Finishing/plumbing/electrical specification in ${langName}"
             }
           ]
         }
@@ -196,49 +214,53 @@ export async function generateAIPredictiveSchedule(params, startStr, lang = 'en'
   }
 
   const prompt = `
-    You are a professional construction scheduler, civil engineer, and architect with 15+ years experience.
-    Analyze the construction scheduling constraints for a building configuration: "${stories}".
+    System Context: You are a principal Project Scheduler, Construction Estimator, and Senior Civil Engineer with 20+ years of expertise in CPM/PERT scheduling and construction management.
+    
+    Task: Calculate duration multipliers and dependency relationships (concurrency and lag) for a G+${stories} construction project under specific site variables.
     
     Site Parameters:
-    - Soil Type: ${soilType}
-    - Start Season: ${season}
-    - Budget Level: ${budget}
+    - Soil Type: ${soilType} (E.g. Expansive Black Cotton Clay slows down foundation/substructure phases to 1.5x due to excavation difficulties and pile casting. Hard Murrum is fast).
+    - Start Season: ${season} (E.g. Monsoons completely stop excavation/foundation casting. Summer heat wave requires extreme curing but accelerates brickwork. Winter slows concrete setting).
+    - Budget Level: ${budget} (E.g. Luxury budget adds finishing layers and QA inspection lag, economy accelerates timelines using standard materials).
     
-    Predict the scheduling relationships and duration multipliers for the main construction phases:
+    Phases to analyze:
     1. "Planning & Approvals"
     2. "Site Setup"
     3. "Substructure"
-    4. "Structure" (Core RCC Frames, columns, slabs)
-    5. "Walls" (Brickwork, masonry and plastering)
-    6. "Plumbing" (Piping, concealed lines, pressure testing)
-    7. "Electrical" (Conduit routing, DB panels, wire pulling)
-    8. "Flooring" (IPS screeding, tiling, dado works)
-    9. "Windows & Doors" (Chaukhat frames, UPVC sashes)
-    10. "Interiors" (False ceilings, carpentry cabinets, LED panels)
-    11. "Exterior Works" (Facade plastering, waterproofing, septic tank, solar panels, landscaping)
-    12. "Commissioning & Handover" (Insulation tests, de-snagging, OC certification)
+    4. "Structure" (RCC column/slab casting)
+    5. "Walls" (Brickwork/plastering)
+    6. "Plumbing" (Piping/concealed drainage)
+    7. "Electrical" (Conduits/DB wiring)
+    8. "Flooring" (screed/tiles)
+    9. "Windows & Doors" (frames/fittings)
+    10. "Interiors" (false ceiling/joinery)
+    11. "Exterior Works" (facade/waterproofing/solar)
+    12. "Commissioning & Handover" (snagging/OC certificate)
     
-    For each phase, determine:
-    - "durationMultiplier": A multiplier (0.8 to 2.0) representing the speed of work under these conditions (e.g. wet monsoon clayey soil slows down substructure to 1.6x, winter slows concrete curing, luxury budget adds QA steps).
-    - "relationship": "Sequential" (must wait for predecessor to finish) or "Parallel" (can overlap with previous phase).
-    - "overlapDays": If Parallel, how many days of overlap are possible (0 to 10 days).
-    - "civilAdvice": Key structural recommendation in "${langName}".
-    - "architectAdvice": Space layout/sanction tip in "${langName}".
-    - "interiorAdvice": Finishing/woodwork suggestion in "${langName}".
+    Instructions:
+    Determine:
+    - "durationMultiplier": Speed coefficient (0.80 to 2.00) based on site conditions.
+    - "relationship": "Sequential" (must wait for predecessor) or "Parallel" (can overlap).
+    - "overlapDays": Overlap lag duration (0 to 10 days) if Parallel.
+    - "civilAdvice", "architectAdvice", "interiorAdvice": Highly technical, code-compliant instructions in "${langName}".
     
-    Return ONLY a JSON object matching this schema. Do not put markdown blocks like \`\`\`json.
+    Language Constraint:
+    - All text descriptions (advice fields) MUST be in the "${langName}" language.
+    
+    Output Format:
+    Return ONLY a raw, valid JSON object matching the schema below. No markdown wrapping.
     
     JSON Schema:
     {
       "phases": [
         {
-          "phaseName": "string",
+          "phaseName": "string (matching the exact phase name from the list above)",
           "durationMultiplier": number,
           "relationship": "Sequential" | "Parallel",
           "overlapDays": number,
-          "civilAdvice": "string in ${langName}",
-          "architectAdvice": "string in ${langName}",
-          "interiorAdvice": "string in ${langName}"
+          "civilAdvice": "Technical civil engineering advisory in ${langName}",
+          "architectAdvice": "Architectural clearance/sanction recommendation in ${langName}",
+          "interiorAdvice": "Interior finishes or MEP scheduling tip in ${langName}"
         }
       ]
     }
@@ -389,18 +411,17 @@ export async function askAdvisorQuestion(question, chatHistory = [], lang = 'en'
   ).join('\n');
 
   const prompt = `
-    You are "Nirmaan Sahayak Advisor", a senior civil engineer, space architect, and professional interior designer with 15+ years experience.
-    You help users build their homes safely, economically, and with top-tier aesthetic quality.
+    System Context: You are "Nirmaan Sahayak Advisor", a Senior Project Management Consultant, Chartered Structural Engineer, and Principal Architect with 20+ years of experience in residential construction.
     
-    Answer the user's question clearly. Use practical terms, mention specific building rules (like curing time, cement grades M20/M25, water-cement ratios), and provide architectural/interior styling tips.
+    Behavior: You speak as a highly knowledgeable, helpful, and technically precise engineering advisor. You always back up your answers with concrete construction codes (like Indian Standard Codes: IS 456 for concrete, IS 1905 for masonry, IS 1200 for measurement), concrete mixes (M20, M25, M30), water-cement ratios, structural safety guidelines, and space styling tips.
     
-    CRITICAL: You MUST write your entire answer in the "${langName}" language.
-    Keep your answer structured using bullet points where necessary.
+    Language Constraint:
+    - You MUST write your entire response in the "${langName}" language. Use technically accurate and polite terms in ${langName}.
     
     Conversation History:
     ${historyContext}
     
-    Current Question:
+    Current User Question:
     ${question}
   `;
 
@@ -880,24 +901,37 @@ export async function analyzeWeatherRisk(city, season, stories, activities, lang
     };
   }
 
-  const prompt = `We are constructing a ${stories}-story building in the city of "${city}" starting on during the "${season}" season. 
-  Analyze the potential weather-related risks and delays for each stage of construction.
-  Here are the activities currently planned:
-  ${JSON.stringify(activities.map(a => ({ id: a.id, name: a.name, stage: a.stage, duration: a.duration })))}
-  
-  Please analyze and return a JSON object matching this schema:
-  {
-    "weatherSummary": "A brief summary of the weather impact based on the city and season (in ${lang === 'hi' ? 'Hindi' : 'English'}).",
-    "affectedActivities": [
-      {
-        "id": "activity_id",
-        "status": "Delayed",
-        "delayDays": number of additional days of delay (0 if no delay),
-        "notes": "Reason for weather delay, e.g., heavy monsoon rains, winter fog, summer heat wave concrete cracking (in ${lang === 'hi' ? 'Hindi' : 'English'})."
-      }
-    ]
-  }
-  Respond ONLY with the raw JSON object. Do not wrap in markdown code blocks or add comments.`;
+  const prompt = `
+    System Context: You are an expert Civil Site Manager, Meteorological Risk Auditor, and Construction Scheduler.
+    
+    Task: Analyze the meteorological impact of "${season}" season in the city of "${city}" for a G+${stories} project, and predict activity-specific delays.
+    
+    Current Project Activities:
+    ${JSON.stringify(activities.map(a => ({ id: a.id, name: a.name, stage: a.stage, duration: a.duration })))}
+    
+    Instructions:
+    1. Identify which outdoor activities (e.g. excavation, foundation casting, slab casting, exterior painting) will be delayed by the typical weather conditions in "${city}" during "${season}" (e.g., heavy monsoon flooding in Mumbai, severe fog and frost in Delhi winters, extreme heat waves in central India summers).
+    2. Suggest concrete, site-level weather-mitigation measures (e.g. using tarpaulins, adding accelerators to concrete, scheduling indoor plastering during peak rain days).
+    
+    Language Constraint:
+    - All text values in the JSON output ("weatherSummary" and "notes" fields) MUST be written in the "${langName}" language.
+    
+    Output Format:
+    Return ONLY a raw, valid JSON object matching the schema below. No markdown code blocks.
+    
+    JSON Schema:
+    {
+      "weatherSummary": "Meteorological risk summary and overall impact statement for ${city} during ${season} in ${langName}.",
+      "affectedActivities": [
+        {
+          "id": "string (matching an activity ID)",
+          "status": "Delayed",
+          "delayDays": number of additional days of delay,
+          "notes": "Specific weather reason and mitigation tip in ${langName}"
+        }
+      ]
+    }
+  `;
 
   try {
     const responseText = await callGemini(prompt, true);
