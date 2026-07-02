@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: nirmansahyak-backend
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: JWT_SECRET
+        value: nirmaan_secret_key_123
+      - key: GEMINI_API_KEY
+        sync: false
