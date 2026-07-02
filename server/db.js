@@ -1,10 +1,11 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, 'nirmaan.db');
+const DB_PATH = path.join(__dirname, '..', 'nirmaan.db');
 
 const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) {
@@ -131,6 +132,23 @@ export async function initDatabase() {
   `);
 
   console.log('Database tables initialized successfully!');
+
+  // Seed default user if not exists
+  try {
+    const defaultEmail = 'buyer@trading.com';
+    const user = await dbGet('SELECT * FROM users WHERE email = ?', [defaultEmail]);
+    if (!user) {
+      console.log('Seeding default user: buyer@trading.com');
+      const hash = await bcrypt.hash('buyer123', 10);
+      await dbRun(
+        'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)',
+        ['default-user-id', 'Prakhar', defaultEmail, hash]
+      );
+      console.log('Default user seeded successfully with password: buyer123');
+    }
+  } catch (err) {
+    console.error('Error seeding default user:', err);
+  }
 }
 
 export default db;
