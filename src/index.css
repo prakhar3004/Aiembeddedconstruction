@@ -1808,7 +1808,7 @@ p {
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
-    max-height: 50vh;
+    max-height: none !important;
   }
 
   div[style*="grid-template-columns: 260px 1fr"] {
@@ -1952,7 +1952,7 @@ p {
   }
 
   .split-left, .split-right {
-    max-height: 45vh;
+    max-height: none !important;
   }
 }
 
