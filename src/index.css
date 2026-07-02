@@ -1824,10 +1824,31 @@ p {
   div[style*="grid-template-columns: 1.2fr 0.8fr"] {
     display: flex !important;
     flex-direction: column !important;
+    height: auto !important;
+    gap: 16px !important;
+    padding-bottom: 90px !important;
   }
 
   .chat-container {
-    height: 400px !important;
+    height: 520px !important;
+  }
+
+  .presets-container {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    padding: 10px 16px !important;
+    gap: 8px !important;
+    white-space: nowrap !important;
+    scrollbar-width: none;
+  }
+
+  .presets-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .preset-pill {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
   }
 
   /* Cards */
