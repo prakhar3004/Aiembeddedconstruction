@@ -496,35 +496,50 @@ app.post('/api/ai/generate', authMiddleware, async (req, res) => {
     return res.status(500).json({ error: 'AI Service is currently unavailable (API key not configured by administrator).' });
   }
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    const requestBody = {
-      contents: [{ parts: [{ text: prompt }] }]
-    };
-    if (isJson) {
-      requestBody.generationConfig = { responseMimeType: 'application/json' };
-    }
+  const maxRetries = 2;
+  let delay = 4000; // Start with 4 seconds to satisfy Gemini's standard cooldown window
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }]
+      };
+      if (isJson) {
+        requestBody.generationConfig = { responseMimeType: 'application/json' };
+      }
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `HTTP ${response.status}`);
-    }
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new Error('Empty response received from Gemini API');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `HTTP ${response.status}`;
+
+        // Retry if we hit a rate limit (HTTP 429) or quota exceeded error
+        if ((response.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) && attempt <= maxRetries) {
+          console.log(`[Gemini Rate Limit] Attempt ${attempt} failed. Retrying in ${delay}ms... Reason: ${errMsg}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 1.5;
+          continue;
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      return res.json({ text });
+    } catch (err) {
+      if (attempt > maxRetries) {
+        console.error('Gemini backend proxy error after all retries:', err);
+        return res.status(500).json({ error: `AI API Error: ${err.message}` });
+      }
+      console.log(`[Gemini Request Error] Attempt ${attempt} failed. Retrying in 2000ms...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
-    res.json({ text });
-  } catch (err) {
-    console.error('Gemini backend proxy error:', err);
-    res.status(500).json({ error: err.message });
   }
 });
 
