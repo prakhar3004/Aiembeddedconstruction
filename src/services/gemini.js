@@ -86,7 +86,7 @@ export async function predictProjectRisk(activities, lang = 'en') {
   if (!isLiveMode()) {
     // Return simulated response with natural delay
     await new Promise(resolve => setTimeout(resolve, 1500));
-    return simulateRiskAnalysis(activities);
+    return simulateRiskAnalysis(activities, lang);
   }
 
   const langName = LANGUAGE_NAMES[lang] || 'English';
@@ -134,7 +134,7 @@ export async function predictProjectRisk(activities, lang = 'en') {
     return JSON.parse(rawJson);
   } catch (error) {
     console.error('Failed to run live risk prediction, falling back to simulator:', error);
-    return simulateRiskAnalysis(activities);
+    return simulateRiskAnalysis(activities, lang);
   }
 }
 
@@ -436,11 +436,13 @@ export async function askAdvisorQuestion(question, chatHistory = [], lang = 'en'
    Simulator / Demo Fallback Mode
    ========================================================================== */
 
-function simulateRiskAnalysis(activities) {
+function simulateRiskAnalysis(activities, lang = 'en') {
   let estimatedDelayDays = 0;
   let overallRisk = 'Low';
   const criticalPathRisks = [];
   const recommendations = [];
+
+  const isHindi = lang === 'hi';
 
   // Inspect activities for delayed status or logs
   const delayed = activities.filter(a => a.status === 'Delayed');
@@ -454,43 +456,80 @@ function simulateRiskAnalysis(activities) {
     delayed.forEach(d => {
       criticalPathRisks.push({
         activityId: d.id,
-        riskDescription: `Delay in ${d.name} is holding up subsequent sequencing.`,
-        impact: `Pushes back the start dates of all descendant tasks. Current delay is estimated at ${d.name === 'Excavation' ? '15' : '10'} days.`
+        riskDescription: isHindi
+          ? `${d.name} में देरी आगामी चरणों के काम में बाधा डाल रही है।`
+          : `Delay in ${d.name} is holding up subsequent sequencing.`,
+        impact: isHindi
+          ? `यह आगामी सभी कार्यों की शुरूआती तारीखों को आगे धकेलेगा। वर्तमान देरी लगभग ${d.name === 'Excavation' ? '15' : '10'} दिन अनुमानित है।`
+          : `Pushes back the start dates of all descendant tasks. Current delay is estimated at ${d.name === 'Excavation' ? '15' : '10'} days.`
       });
     });
 
-    recommendations.push(
-      'Deploy additional labor force to expedite current delayed phases.',
-      'Check raw material stocks (cement/aggregate/sand) to avoid further supply chain lag.',
-      'Reschedule upcoming non-structural activities (e.g. brickwork planning) to parallelize tasks.'
-    );
+    if (isHindi) {
+      recommendations.push(
+        'देरी को कम करने के लिए अतिरिक्त श्रमिक बल तैनात करें।',
+        'सप्लाई चेन में और रुकावट से बचने के लिए कच्चे माल (सीमेंट/बजरी/रेत) के स्टॉक की जांच करें।',
+        'आगे के गैर-ढांचागत कार्यों (जैसे चिनाई की योजना) को समानांतर में करने के लिए समय-सारणी बदलें।'
+      );
+    } else {
+      recommendations.push(
+        'Deploy additional labor force to expedite current delayed phases.',
+        'Check raw material stocks (cement/aggregate/sand) to avoid further supply chain lag.',
+        'Reschedule upcoming non-structural activities (e.g. brickwork planning) to parallelize tasks.'
+      );
+    }
   } else if (inProgress.length > 0) {
     overallRisk = 'Medium';
     estimatedDelayDays = 5;
     
     criticalPathRisks.push({
       activityId: inProgress[0].id,
-      riskDescription: `${inProgress[0].name} is currently active and requires strict progress monitoring.`,
-      impact: 'If this phase extends past its deadline, it will delay the next sequence.'
+      riskDescription: isHindi
+        ? `${inProgress[0].name} वर्तमान में सक्रिय है और प्रगति की कड़ी निगरानी की आवश्यकता है।`
+        : `${inProgress[0].name} is currently active and requires strict progress monitoring.`,
+      impact: isHindi
+        ? `यदि यह चरण अपनी समय-सीमा से आगे बढ़ता है, तो यह अगले अनुक्रम में देरी करेगा।`
+        : 'If this phase extends past its deadline, it will delay the next sequence.'
     });
 
-    recommendations.push(
-      'Verify that material procurement for the next phase is complete.',
-      'Conduct daily QC inspections to catch issues (shuttering leaks, steel placement) early.'
-    );
+    if (isHindi) {
+      recommendations.push(
+        'सत्यापित करें कि अगले चरण के लिए सामग्री खरीद पूरी हो चुकी है।',
+        'समस्याओं (शटरिंग रिसाव, स्टील संरेखण) को जल्द पकड़ने के लिए दैनिक गुणवत्ता जांच (QC) निरीक्षण करें।'
+      );
+    } else {
+      recommendations.push(
+        'Verify that material procurement for the next phase is complete.',
+        'Conduct daily QC inspections to catch issues (shuttering leaks, steel placement) early.'
+      );
+    }
   } else {
     overallRisk = 'Low';
     estimatedDelayDays = 0;
-    recommendations.push(
-      'Maintain current workflow speed. Ensure concrete curing regimes are adhered to strictly.',
-      'Update timeline daily as new milestones are hit.'
-    );
+    if (isHindi) {
+      recommendations.push(
+        'वर्तमान कार्य गति बनाए रखें। सुनिश्चित करें कि कंक्रीट तराई (curing) नियमों का कड़ाई से पालन किया जाए।',
+        'जैसे-जैसे नए मील के पत्थर हासिल हों, समय-सीमा को दैनिक रूप से अपडेट करें।'
+      );
+    } else {
+      recommendations.push(
+        'Maintain current workflow speed. Ensure concrete curing regimes are adhered to strictly.',
+        'Update timeline daily as new milestones are hit.'
+      );
+    }
+  }
+
+  let summaryText = '';
+  if (isHindi) {
+    summaryText = `वर्तमान प्रगति के आधार पर, परियोजना की समय-सीमा ${overallRisk === 'High' ? 'अधूरी गतिविधियों के कारण गंभीर देरी के जोखिम में है।' : 'स्थिर है। समय-सारणी कुल मिलाकर अनुमानित और सही है।'}`;
+  } else {
+    summaryText = `Based on current progress, the project timeline is ${overallRisk === 'High' ? 'at critical delay risk due to uncompleted stages.' : 'stable. Schedule is overall predictable.'}`;
   }
 
   return {
     overallRisk,
     estimatedDelayDays,
-    summary: `Based on current progress, the project timeline is ${overallRisk === 'High' ? 'at critical delay risk due to uncompleted stages.' : 'stable. Schedule is overall predictable.'}`,
+    summary: summaryText,
     criticalPathRisks,
     recommendations
   };
