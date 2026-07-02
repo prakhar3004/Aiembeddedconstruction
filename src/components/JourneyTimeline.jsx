@@ -11,6 +11,7 @@ export default function JourneyTimeline({
 }) {
   const t = UI_TRANSLATIONS[language] || UI_TRANSLATIONS.en;
   const [taskFilter, setTaskFilter] = useState('all'); // 'all', 'default', 'addon'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'In Progress', 'Completed', 'Pending', 'Delayed'
   const [scaleMode, setScaleMode] = useState('week'); // 'day', 'week', 'month'
   const [view3D, setView3D] = useState(true);
   const [shiftDays, setShiftDays] = useState(0); // Interactive slider shift
@@ -57,7 +58,6 @@ export default function JourneyTimeline({
       actualStartDate: editActualStartDate || null,
       actualEndDate: editActualEndDate || null
     });
-    alert(language === 'hi' ? 'कार्य सफलतापूर्वक अपडेट किया गया! परिवर्तनों को देखने के लिए डैशबोर्ड पर "जोखिम विश्लेषण" चलाएं।' : 'Activity updated! Run AI Risk prediction on Dashboard to update project analysis.');
   };
 
   // Shift dates helper
@@ -68,10 +68,19 @@ export default function JourneyTimeline({
     return date.toISOString().split('T')[0];
   };
 
-  // Filter activities based on selection
+  // Filter activities based on selection and status
   const filteredActivities = activities.filter(act => {
-    if (taskFilter === 'default') return !act.isAddon;
-    if (taskFilter === 'addon') return act.isAddon;
+    // Task type filter
+    if (taskFilter === 'default' && act.isAddon) return false;
+    if (taskFilter === 'addon' && !act.isAddon) return false;
+    
+    // Status filter
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'Pending') {
+        return act.status === 'Pending' || act.status === 'Not Started';
+      }
+      return act.status === statusFilter;
+    }
     return true;
   });
 
@@ -215,6 +224,23 @@ export default function JourneyTimeline({
                   <option value="all">{t.allTasks}</option>
                   <option value="default">{t.defaultTasks}</option>
                   <option value="addon">{t.addonTasks}</option>
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{language === 'hi' ? 'स्थिति:' : 'Status:'}</span>
+                <select 
+                  className="form-select" 
+                  style={{ padding: '4px 8px', fontSize: '11px', height: '28px', minWidth: '110px' }}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">{language === 'hi' ? 'सभी' : 'All Statuses'}</option>
+                  <option value="In Progress">{language === 'hi' ? 'प्रगति पर (Ongoing)' : 'Ongoing (In Progress)'}</option>
+                  <option value="Completed">{language === 'hi' ? 'पूरा हुआ (Completed)' : 'Completed'}</option>
+                  <option value="Pending">{language === 'hi' ? 'लंबित (Upcoming)' : 'Upcoming (Pending)'}</option>
+                  <option value="Delayed">{language === 'hi' ? 'देरी (Delayed)' : 'Delayed'}</option>
                 </select>
               </div>
 
