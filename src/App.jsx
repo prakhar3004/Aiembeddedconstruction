@@ -423,15 +423,81 @@ export default function App() {
   };
 
   const handleUpdateActivity = async (activityId, fields) => {
-    setActivities(prev => prev.map(act => {
-      if (act.id !== activityId) return act;
-      return { ...act, ...fields };
-    }));
+    let updatedActivities = [...activities];
+    const index = activities.findIndex(a => a.id === activityId);
+    let shiftedCount = 0;
+    
+    if (index !== -1) {
+      const prevAct = activities[index];
+      let deltaDays = 0;
+      
+      // Case 1: If planned endDate changed
+      if (fields.endDate && fields.endDate !== prevAct.endDate) {
+        const oldEnd = new Date(prevAct.endDate);
+        const newEnd = new Date(fields.endDate);
+        deltaDays = Math.round((newEnd - oldEnd) / (1000 * 60 * 60 * 24));
+      }
+      // Case 2: If actualEndDate changed
+      else if (fields.actualEndDate && fields.actualEndDate !== prevAct.actualEndDate) {
+        const oldActualEnd = prevAct.actualEndDate ? new Date(prevAct.actualEndDate) : new Date(prevAct.endDate);
+        const newActualEnd = new Date(fields.actualEndDate);
+        deltaDays = Math.round((newActualEnd - oldActualEnd) / (1000 * 60 * 60 * 24));
+      }
+      // Case 3: If planned startDate changed
+      else if (fields.startDate && fields.startDate !== prevAct.startDate) {
+        const oldStart = new Date(prevAct.startDate);
+        const newStart = new Date(fields.startDate);
+        deltaDays = Math.round((newStart - oldStart) / (1000 * 60 * 60 * 24));
+      }
+
+      if (deltaDays !== 0) {
+        const shiftDate = (dateStr, days) => {
+          if (!dateStr) return dateStr;
+          const d = new Date(dateStr);
+          d.setDate(d.getDate() + days);
+          return d.toISOString().split('T')[0];
+        };
+
+        updatedActivities = activities.map((act, idx) => {
+          if (idx === index) {
+            return { ...act, ...fields };
+          }
+          if (idx > index) {
+            shiftedCount++;
+            return {
+              ...act,
+              startDate: shiftDate(act.startDate, deltaDays),
+              endDate: shiftDate(act.endDate, deltaDays)
+            };
+          }
+          return act;
+        });
+      } else {
+        updatedActivities = activities.map(act => act.id === activityId ? { ...act, ...fields } : act);
+      }
+    }
+
+    setActivities(updatedActivities);
 
     try {
-      await apiService.updateActivity(activeProjectId, activityId, fields);
+      if (shiftedCount > 0) {
+        await apiService.bulkUpdateActivities(activeProjectId, updatedActivities);
+        showToast(
+          language === 'hi' 
+            ? `परिवर्तन सिंक हुआ! आगे की ${shiftedCount} गतिविधियों की तारीखें शिफ्ट कर दी गईं।` 
+            : `Schedule shifted! Cascaded dates for ${shiftedCount} succeeding activities.`,
+          'success'
+        );
+      } else {
+        await apiService.updateActivity(activeProjectId, activityId, fields);
+        showToast(
+          language === 'hi' ? 'माइलस्टोन सफलतापूर्वक अपडेट किया गया!' : 'Milestone updated successfully!',
+          'success'
+        );
+      }
     } catch (err) {
       console.error('Failed to update activity on database:', err);
+      showToast(`Database update failed: ${err.message}`, 'error');
     }
   };
 
@@ -658,7 +724,7 @@ export default function App() {
 
   // Screen 1: Auth
   if (!currentUser) {
-    return <AuthPage onLogin={handleLogin} />;
+    return <AuthPage onLogin={handleLogin} language={language} onLanguageChange={setLanguage} />;
   }
 
   // Screen 2: Onboarding (new project or no projects)
