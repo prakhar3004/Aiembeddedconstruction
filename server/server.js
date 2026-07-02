@@ -486,59 +486,129 @@ app.get('/', (req, res) => {
 });
 // ─── AI PROXY ENDPOINTS ───
 app.get('/api/ai/config', (req, res) => {
-  res.json({ hasApiKey: !!process.env.GEMINI_API_KEY });
+  res.json({ hasApiKey: !!process.env.GEMINI_API_KEY || !!process.env.GROQ_API_KEY });
 });
 
 app.post('/api/ai/generate', authMiddleware, async (req, res) => {
-  const { prompt, isJson } = req.body;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'AI Service is currently unavailable (API key not configured by administrator).' });
-  }
+  const { prompt, isJson, provider } = req.body;
+  const selectedProvider = provider || (process.env.GROQ_API_KEY ? 'groq' : 'gemini');
 
-  const maxRetries = 2;
-  let delay = 4000; // Start with 4 seconds to satisfy Gemini's standard cooldown window
+  if (selectedProvider === 'groq') {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Groq API Key is not configured by administrator.' });
+    }
 
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-      const requestBody = {
-        contents: [{ parts: [{ text: prompt }] }]
-      };
-      if (isJson) {
-        requestBody.generationConfig = { responseMimeType: 'application/json' };
-      }
+    const maxRetries = 2;
+    let delay = 3000;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
+    // Start with the large model
+    let currentModel = 'llama-3.3-70b-versatile';
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const errMsg = errData.error?.message || `HTTP ${response.status}`;
-
-        // Retry if we hit a rate limit (HTTP 429) or quota exceeded error
-        if ((response.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) && attempt <= maxRetries) {
-          console.log(`[Gemini Rate Limit] Attempt ${attempt} failed. Retrying in ${delay}ms... Reason: ${errMsg}`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay *= 1.5;
-          continue;
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        const url = 'https://api.groq.com/openai/v1/chat/completions';
+        const requestBody = {
+          model: currentModel,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 3000 // Limit response length to stay within TPM quotas
+        };
+        if (isJson) {
+          requestBody.response_format = { type: 'json_object' };
         }
-        throw new Error(errMsg);
-      }
 
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      return res.json({ text });
-    } catch (err) {
-      if (attempt > maxRetries) {
-        console.error('Gemini backend proxy error after all retries:', err);
-        return res.status(500).json({ error: `AI API Error: ${err.message}` });
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData.error?.message || `HTTP ${response.status}`;
+
+          // If request fails because of Llama 3.3 70B's low TPM limit (12000), fallback to 8B model immediately
+          if ((errMsg.toLowerCase().includes('tpm') || errMsg.toLowerCase().includes('limit') || errMsg.toLowerCase().includes('token')) && currentModel === 'llama-3.3-70b-versatile') {
+            console.log(`[Groq TPM Limit] Swapping to llama-3.1-8b-instant due to TPM limit: ${errMsg}`);
+            currentModel = 'llama-3.1-8b-instant';
+            attempt = 1; // Reset attempts to try fresh with the smaller model
+            continue;
+          }
+
+          if ((response.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) && attempt <= maxRetries) {
+            console.log(`[Groq Rate Limit] Attempt ${attempt} failed. Retrying in ${delay}ms... Reason: ${errMsg}`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 1.5;
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content;
+        return res.json({ text });
+      } catch (err) {
+        if (attempt > maxRetries) {
+          console.error('Groq backend proxy error after all retries:', err);
+          return res.status(500).json({ error: `AI API Error (Groq): ${err.message}` });
+        }
+        console.log(`[Groq Request Error] Attempt ${attempt} failed. Retrying in 2000ms...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      console.log(`[Gemini Request Error] Attempt ${attempt} failed. Retrying in 2000ms...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  } else {
+    // Gemini
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini API Key is not configured by administrator.' });
+    }
+
+    const maxRetries = 2;
+    let delay = 4000;
+
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const requestBody = {
+          contents: [{ parts: [{ text: prompt }] }]
+        };
+        if (isJson) {
+          requestBody.generationConfig = { responseMimeType: 'application/json' };
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData.error?.message || `HTTP ${response.status}`;
+
+          if ((response.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) && attempt <= maxRetries) {
+            console.log(`[Gemini Rate Limit] Attempt ${attempt} failed. Retrying in ${delay}ms... Reason: ${errMsg}`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 1.5;
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return res.json({ text });
+      } catch (err) {
+        if (attempt > maxRetries) {
+          console.error('Gemini backend proxy error after all retries:', err);
+          return res.status(500).json({ error: `AI API Error (Gemini): ${err.message}` });
+        }
+        console.log(`[Gemini Request Error] Attempt ${attempt} failed. Retrying in 2000ms...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
   }
 });
