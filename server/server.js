@@ -15,6 +15,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+// Request logger middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // Helper to generate secure UUID
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -402,6 +408,81 @@ app.put('/api/projects/:projectId/risk', authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to update risk report' });
   }
+});
+
+// ─── API LANDING PAGE ───
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Nirmaan Sahayak API Gateway</title>
+      <style>
+        body {
+          background-color: #0a0c12;
+          color: #f0f0f5;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          margin: 0;
+          text-align: center;
+        }
+        .container {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          padding: 40px 30px;
+          max-width: 500px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(8px);
+        }
+        h1 {
+          color: #f97316;
+          margin-top: 0;
+          font-size: 28px;
+          letter-spacing: 0.5px;
+        }
+        p {
+          color: #9ca3af;
+          font-size: 15px;
+          line-height: 1.6;
+        }
+        .btn {
+          display: inline-block;
+          margin-top: 20px;
+          padding: 12px 24px;
+          background: #f97316;
+          color: #ffffff;
+          text-decoration: none;
+          border-radius: 8px;
+          font-weight: bold;
+          transition: background 0.2s;
+        }
+        .btn:hover {
+          background: #ea580c;
+        }
+        .footer {
+          margin-top: 30px;
+          font-size: 11px;
+          color: #4b5563;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>🏗️ Nirmaan Sahayak API</h1>
+        <p>The backend services and SQLite database are active and running securely.</p>
+        <p>To access the main user application dashboard, please open the link below:</p>
+        <a href="http://localhost:3000" class="btn">Launch Application Portal</a>
+        <div class="footer">Nirmaan Sahayak v1.0.0 • Secure API Gateway</div>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 // Start Server and migrate DB
