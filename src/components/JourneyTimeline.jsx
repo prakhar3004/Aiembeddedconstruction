@@ -549,7 +549,7 @@ export default function JourneyTimeline({
                                             overflow: 'hidden'
                                           }}
                                         >
-                                          {act.status === 'Completed' ? '✓ ' : ''}{Math.max(1, Math.round(actWidth / dayWidth))}d ({getStatusTranslation(act.status)})
+                                          {act.status === 'Completed' ? '✓ ' : ''}{Math.max(1, Math.round(actWidth / dayWidth))}d
                                         </div>
                                         {/* Right Cap */}
                                         <div 
@@ -646,10 +646,10 @@ export default function JourneyTimeline({
                 value={editStatus}
                 onChange={(e) => setEditStatus(e.target.value)}
               >
-                <option value="Pending">{t.pending}</option>
-                <option value="In Progress">{t.inProgress}</option>
-                <option value="Completed">{t.completed}</option>
-                <option value="Delayed">{t.delayed}</option>
+                <option value="Pending">{getStatusTranslation('Pending')}</option>
+                <option value="In Progress">{getStatusTranslation('In Progress')}</option>
+                <option value="Completed">{getStatusTranslation('Completed')}</option>
+                <option value="Delayed">{getStatusTranslation('Delayed')}</option>
               </select>
             </div>
 
