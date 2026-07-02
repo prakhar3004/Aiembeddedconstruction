@@ -1,0 +1,27 @@
+# Node dependencies
+node_modules/
+
+# Production build artifacts
+dist/
+build/
+
+# Local env files / secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database files
+server/nirmaan.db
+server/nirmaan.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
