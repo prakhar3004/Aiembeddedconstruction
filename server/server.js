@@ -496,165 +496,115 @@ app.get('/api/ai/config', (req, res) => {
   res.json({ hasApiKey: !!process.env.GEMINI_API_KEY || !!process.env.GROQ_API_KEY || !!process.env.CLOD_API_KEY });
 });
 
+// Per-provider generators — each returns text or throws (fast-fail enables failover).
+async function generateClod(prompt, isJson) {
+  const apiKey = process.env.CLOD_API_KEY;
+  if (!apiKey) throw new Error('CLoD key not configured');
+  const model = process.env.CLOD_MODEL || 'GPT OSS 120B';
+  const messages = [];
+  // Omit response_format:{type:'json_object'} — the free GPT OSS 120B breaks with it;
+  // a system nudge + prompt-driven JSON is reliable.
+  if (isJson) {
+    messages.push({ role: 'system', content: 'You are a strict JSON API. Respond with ONLY one valid raw JSON value. No markdown, no code fences, no commentary.' });
+  }
+  messages.push({ role: 'user', content: prompt });
+  const response = await fetch('https://api.clod.io/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, messages, max_tokens: 4000 })
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(`CLoD HTTP ${response.status}: ${e.error?.message || ''}`);
+  }
+  const data = await response.json();
+  let text = data.choices?.[0]?.message?.content || '';
+  if (isJson && text) text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  if (!text.trim()) throw new Error('CLoD returned empty text');
+  return text;
+}
+
+async function generateGroq(prompt, isJson) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('Groq key not configured');
+  let model = 'llama-3.3-70b-versatile';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const body = { model, messages: [{ role: 'user', content: prompt }], max_tokens: 3000 };
+    if (isJson) body.response_format = { type: 'json_object' };
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      const e = await response.json().catch(() => ({}));
+      const msg = e.error?.message || `HTTP ${response.status}`;
+      if ((msg.toLowerCase().includes('tpm') || msg.toLowerCase().includes('token') || msg.toLowerCase().includes('limit')) && model === 'llama-3.3-70b-versatile') {
+        model = 'llama-3.1-8b-instant';
+        continue;
+      }
+      throw new Error(`Groq: ${msg}`);
+    }
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error('Groq returned empty text');
+    return text;
+  }
+  throw new Error('Groq failed after model fallback');
+}
+
+async function generateGemini(prompt, isJson) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('Gemini key not configured');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const body = { contents: [{ parts: [{ text: prompt }] }] };
+  if (isJson) body.generationConfig = { responseMimeType: 'application/json' };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(`Gemini: ${e.error?.message || ('HTTP ' + response.status)}`);
+  }
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini returned empty text');
+  return text;
+}
+
+const AI_PROVIDERS = {
+  clod: { fn: generateClod, key: 'CLOD_API_KEY' },
+  gemini: { fn: generateGemini, key: 'GEMINI_API_KEY' },
+  groq: { fn: generateGroq, key: 'GROQ_API_KEY' }
+};
+
 app.post('/api/ai/generate', aiLimiter, authMiddleware, async (req, res) => {
   const { prompt, isJson, provider } = req.body;
-  const selectedProvider = provider || 'clod';
+  if (!prompt) return res.status(400).json({ error: 'prompt is required' });
 
-  if (selectedProvider === 'clod') {
-    // ─── CLoD (clod.io) — OpenAI-compatible multi-provider gateway ───
-    const apiKey = process.env.CLOD_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'CLoD API Key is not configured by administrator.' });
-    }
+  // Try the preferred provider first, then fail over to the others that have keys.
+  // (clod is often IP-blocked from datacenters, so Gemini/Groq are live fallbacks.)
+  const preferred = provider && AI_PROVIDERS[provider] ? provider : 'clod';
+  const order = [...new Set([preferred, 'gemini', 'groq', 'clod'])]
+    .filter(p => AI_PROVIDERS[p] && process.env[AI_PROVIDERS[p].key]);
 
-    const model = process.env.CLOD_MODEL || 'GPT OSS 120B';
-    const maxRetries = 2;
-    let delay = 2500;
+  if (order.length === 0) {
+    return res.status(500).json({ error: 'No AI provider is configured by the administrator.' });
+  }
 
-    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      try {
-        const messages = [];
-        // We deliberately omit response_format:{type:'json_object'} — the default free
-        // model (GPT OSS 120B) breaks with it; prompt-driven JSON + this system nudge is reliable.
-        if (isJson) {
-          messages.push({
-            role: 'system',
-            content: 'You are a strict JSON API. Respond with ONLY one valid raw JSON value. No markdown, no code fences, no commentary before or after.'
-          });
-        }
-        messages.push({ role: 'user', content: prompt });
-
-        const response = await fetch('https://api.clod.io/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({ model, messages, max_tokens: 4000 })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          const errMsg = errData.error?.message || `HTTP ${response.status}`;
-          if ((response.status === 429 || errMsg.toLowerCase().includes('rate') || errMsg.toLowerCase().includes('limit')) && attempt <= maxRetries) {
-            console.log(`[CLoD Rate Limit] Attempt ${attempt} failed. Retrying in ${delay}ms... Reason: ${errMsg}`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 1.5;
-            continue;
-          }
-          throw new Error(errMsg);
-        }
-
-        const data = await response.json();
-        let text = data.choices?.[0]?.message?.content || '';
-        if (isJson && text) {
-          text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-        }
-        return res.json({ text });
-      } catch (err) {
-        if (attempt > maxRetries) {
-          console.error('CLoD backend proxy error after all retries:', err.message);
-          return res.status(500).json({ error: `AI API Error (CLoD): ${err.message}` });
-        }
-        console.log(`[CLoD Request Error] Attempt ${attempt} failed. Retrying in 2000ms...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-  } else if (selectedProvider === 'groq') {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Groq API Key is not configured by administrator.' });
-    }
-
-    const maxRetries = 2;
-    let delay = 3000;
-    let currentModel = 'llama-3.3-70b-versatile';
-
-    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      try {
-        const requestBody = {
-          model: currentModel,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 3000
-        };
-        if (isJson) requestBody.response_format = { type: 'json_object' };
-
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          const errMsg = errData.error?.message || `HTTP ${response.status}`;
-          if ((errMsg.toLowerCase().includes('tpm') || errMsg.toLowerCase().includes('limit') || errMsg.toLowerCase().includes('token')) && currentModel === 'llama-3.3-70b-versatile') {
-            currentModel = 'llama-3.1-8b-instant';
-            attempt = 1;
-            continue;
-          }
-          if ((response.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) && attempt <= maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 1.5;
-            continue;
-          }
-          throw new Error(errMsg);
-        }
-
-        const data = await response.json();
-        return res.json({ text: data.choices?.[0]?.message?.content });
-      } catch (err) {
-        if (attempt > maxRetries) {
-          console.error('Groq backend proxy error after all retries:', err.message);
-          return res.status(500).json({ error: `AI API Error (Groq): ${err.message}` });
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-  } else {
-    // Gemini
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Gemini API Key is not configured by administrator.' });
-    }
-
-    const maxRetries = 2;
-    let delay = 4000;
-
-    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
-        if (isJson) requestBody.generationConfig = { responseMimeType: 'application/json' };
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          const errMsg = errData.error?.message || `HTTP ${response.status}`;
-          if ((response.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) && attempt <= maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 1.5;
-            continue;
-          }
-          throw new Error(errMsg);
-        }
-
-        const data = await response.json();
-        return res.json({ text: data.candidates?.[0]?.content?.parts?.[0]?.text });
-      } catch (err) {
-        if (attempt > maxRetries) {
-          console.error('Gemini backend proxy error after all retries:', err.message);
-          return res.status(500).json({ error: `AI API Error (Gemini): ${err.message}` });
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+  const errors = [];
+  for (const p of order) {
+    try {
+      const text = await AI_PROVIDERS[p].fn(prompt, isJson);
+      return res.json({ text, provider: p });
+    } catch (err) {
+      console.log(`[AI:${p}] failed: ${err.message}`);
+      errors.push(`${p}: ${err.message}`);
     }
   }
+  return res.status(502).json({ error: `All AI providers failed. ${errors.join(' | ')}` });
 });
 
 // Start server after DB is ready.
