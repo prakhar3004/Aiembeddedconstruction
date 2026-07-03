@@ -1038,6 +1038,15 @@ body {
   to { transform: scale(1); opacity: 1; }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Demo/Simulator Ribbon */
 .demo-ribbon {
   background: linear-gradient(90deg, #f59e0b, #d97706);

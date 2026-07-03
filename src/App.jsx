@@ -364,9 +364,18 @@ export default function App() {
       const newProj = await apiService.createProject(projectData);
       setProjects(prev => [newProj, ...prev]);
       setActiveProjectId(newProj.id);
+      setActiveTab('dashboard');
       setShowOnboarding(false);
+      showToast(
+        language === 'hi' ? 'आपकी कंस्ट्रक्शन जर्नी सफलतापूर्वक तैयार कर ली गई है!' : 'Your construction journey has been successfully generated!',
+        'success'
+      );
     } catch (err) {
-      showToast(`Failed to save project: ${err.message}`, 'error');
+      showToast(
+        language === 'hi' ? `जर्नी जनरेट करने में विफलता: ${err.message}` : `Failed to generate journey: ${err.message}`, 
+        'error'
+      );
+      throw err;
     }
   };
 
@@ -743,7 +752,7 @@ export default function App() {
 
   // Screen 2: Onboarding (new project or no projects)
   if (showOnboarding || projects.length === 0) {
-    return <PlotOnboarding user={currentUser} onComplete={handleOnboardingComplete} />;
+    return <PlotOnboarding user={currentUser} onComplete={handleOnboardingComplete} language={language} />;
   }
 
   // Screen 3: Main App

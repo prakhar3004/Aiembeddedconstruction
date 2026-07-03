@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Building2, Sparkles, ArrowRight, ArrowLeft, Check, Ruler, Compass, CalendarDays, Wallet } from 'lucide-react';
+import { MapPin, Building2, Sparkles, ArrowRight, ArrowLeft, Check, Ruler, Compass, CalendarDays, Wallet, RefreshCw } from 'lucide-react';
 import { BUILDING_CONFIGS } from '../utils/activityGenerator';
 
 const SOIL_TYPES = ['Black Cotton', 'Hard Murrum', 'Sandy Loam', 'Laterite', 'Rocky / Hard Strata', 'Alluvial Clay'];
@@ -7,8 +7,9 @@ const SEASONS = ['Summer (March–June)', 'Monsoon (July–September)', 'Post-Mo
 const BUDGETS = ['Economy (₹800–1200/sqft)', 'Standard (₹1200–1800/sqft)', 'Premium (₹1800–2500/sqft)', 'Ultra Luxury (₹2500+/sqft)'];
 const FACINGS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West'];
 
-export default function PlotOnboarding({ user, onComplete }) {
+export default function PlotOnboarding({ user, onComplete, language }) {
   const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Step 1: Plot Details
   const [plotArea, setPlotArea] = useState('');
@@ -27,7 +28,8 @@ export default function PlotOnboarding({ user, onComplete }) {
   const configKeys = Object.keys(BUILDING_CONFIGS);
   const floors = BUILDING_CONFIGS[buildingType] || [];
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    setIsLoading(true);
     const plotDetails = {
       plotArea: plotArea || '1500',
       plotShape,
@@ -45,7 +47,13 @@ export default function PlotOnboarding({ user, onComplete }) {
     // Save to localStorage
     localStorage.setItem('nirmaan_plot_details', JSON.stringify(plotDetails));
 
-    onComplete(plotDetails);
+    try {
+      await onComplete(plotDetails);
+    } catch (err) {
+      console.error('Failed to complete onboarding:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const stepClass = (s) => {
@@ -251,11 +259,21 @@ export default function PlotOnboarding({ user, onComplete }) {
             </div>
 
             <div className="onboarding-actions">
-              <button className="btn-back" onClick={() => setStep(2)}>
+              <button className="btn-back" onClick={() => setStep(2)} disabled={isLoading}>
                 <ArrowLeft size={14} /> Back
               </button>
-              <button className="btn-next" onClick={handleFinish}>
-                <Sparkles size={16} /> Generate My Construction Journey
+              <button className="btn-next" onClick={handleFinish} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="animate-spin" size={16} style={{ marginRight: '6px' }} />
+                    {language === 'hi' ? 'जर्नी जनरेट हो रही है...' : 'Generating Journey...'}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} />
+                    {language === 'hi' ? 'मेरी कंस्ट्रक्शन जर्नी जनरेट करें' : 'Generate My Construction Journey'}
+                  </>
+                )}
               </button>
             </div>
           </>
