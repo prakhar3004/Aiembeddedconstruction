@@ -30,9 +30,11 @@ app.set('trust proxy', 1);
 // When unset (local dev), all origins are allowed.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
+const mobileOrigins = ['http://localhost', 'capacitor://localhost'];
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.length === 0) return cb(null, true);
+    if (mobileOrigins.includes(origin)) return cb(null, true);
     return cb(null, allowedOrigins.includes(origin));
   }
 }));

@@ -1,49 +1,100 @@
-// PostgreSQL data layer for Nirmaan Sahayak (Supabase-compatible).
-// Uses a single connection pool. Connection string comes from DATABASE_URL
-// (Supabase → Project Settings → Database → Connection string / URI).
+// PostgreSQL data layer for Nirmaan Sahayak with SQLite fallback.
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
-
-const { Pool } = pg;
+import sqlite3 from 'sqlite3';
 
 const connectionString = process.env.DATABASE_URL;
+let pool = null;
+let sqliteDb = null;
+let useSqlite = false;
+
 if (!connectionString) {
-  console.error('FATAL: DATABASE_URL is not set. Add your Supabase Postgres connection string to the environment.');
+  console.warn('[WARN] DATABASE_URL is not set. Falling back to local SQLite database (nirmaan.db).');
+  useSqlite = true;
+  sqliteDb = new sqlite3.Database('nirmaan.db');
+} else {
+  const { Pool } = pg;
+  const isLocal = /localhost|127\.0\.0\.1/.test(connectionString);
+  pool = new Pool({
+    connectionString,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected PostgreSQL pool error:', err.message);
+  });
 }
 
-// Supabase (and most managed Postgres) require SSL. Local Postgres does not.
-const isLocal = !!connectionString && /localhost|127\.0\.0\.1/.test(connectionString);
+// Convert Postgres $1, $2, etc. to SQLite ? placeholders
+function convertPgToSqlite(sql) {
+  let cleaned = sql.replace(/\$\d+/g, '?');
+  cleaned = cleaned.replace(/TIMESTAMPTZ\s+DEFAULT\s+NOW\(\)/gi, 'TEXT DEFAULT CURRENT_TIMESTAMP');
+  cleaned = cleaned.replace(/TIMESTAMPTZ/gi, 'TEXT');
+  return cleaned;
+}
 
-const pool = new Pool({
-  connectionString,
-  ssl: isLocal ? false : { rejectUnauthorized: false },
-  max: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
-});
-
-pool.on('error', (err) => {
-  console.error('Unexpected PostgreSQL pool error:', err.message);
-});
-
-// ─── Promisified query helpers (sqlite-style API kept for minimal route churn) ───
 export const dbRun = async (sql, params = []) => {
-  const res = await pool.query(sql, params);
-  return { changes: res.rowCount, rows: res.rows };
+  if (useSqlite) {
+    return new Promise((resolve, reject) => {
+      sqliteDb.run(convertPgToSqlite(sql), params, function(err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, rows: [] });
+      });
+    });
+  } else {
+    const res = await pool.query(sql, params);
+    return { changes: res.rowCount, rows: res.rows };
+  }
 };
 
 export const dbGet = async (sql, params = []) => {
-  const res = await pool.query(sql, params);
-  return res.rows[0];
+  if (useSqlite) {
+    return new Promise((resolve, reject) => {
+      sqliteDb.get(convertPgToSqlite(sql), params, (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+  } else {
+    const res = await pool.query(sql, params);
+    return res.rows[0];
+  }
 };
 
 export const dbAll = async (sql, params = []) => {
-  const res = await pool.query(sql, params);
-  return res.rows;
+  if (useSqlite) {
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(convertPgToSqlite(sql), params, (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows);
+      });
+    });
+  } else {
+    const res = await pool.query(sql, params);
+    return res.rows;
+  }
 };
 
-// Borrow a dedicated client for multi-statement transactions.
-export const getClient = () => pool.connect();
+export const getClient = async () => {
+  if (useSqlite) {
+    return {
+      query: async (sql, params = []) => {
+        return new Promise((resolve, reject) => {
+          sqliteDb.all(convertPgToSqlite(sql), params, (err, rows) => {
+            if (err) return reject(err);
+            resolve({ rows });
+          });
+        });
+      },
+      release: () => {}
+    };
+  } else {
+    return pool.connect();
+  }
+};
 
 // ─── Schema creation & lightweight migrations ───
 export async function initDatabase() {
@@ -124,8 +175,16 @@ export async function initDatabase() {
   `);
 
   // Migrations for databases created before plot_area/city existed
-  await dbRun(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS plot_area TEXT`);
-  await dbRun(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS city TEXT`);
+  try {
+    await dbRun(`ALTER TABLE projects ADD COLUMN plot_area TEXT`);
+  } catch (err) {
+    // Ignore error if column already exists or syntax not supported on SQLite
+  }
+  try {
+    await dbRun(`ALTER TABLE projects ADD COLUMN city TEXT`);
+  } catch (err) {
+    // Ignore error
+  }
 
   // Helpful indexes for the common lookups
   await dbRun(`CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id)`);
