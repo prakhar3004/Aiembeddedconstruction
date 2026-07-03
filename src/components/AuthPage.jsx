@@ -440,31 +440,6 @@ export default function AuthPage({ onLogin, language = 'en', onLanguageChange })
               </button>
             </form>
           )}
-
-          {/* API Server URL Config */}
-          <div style={{ marginTop: '24px', borderTop: '1px dashed var(--border-color)', paddingTop: '16px' }}>
-            <details style={{ cursor: 'pointer' }}>
-              <summary style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                ⚙️ {language === 'hi' ? 'एपीआई सर्वर सेटिंग्स (Vercel/Local)' : 'API Server URL Settings'}
-              </summary>
-              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ height: '30px', fontSize: '11px', padding: '0 8px' }}
-                  value={apiBaseInput}
-                  onChange={(e) => handleApiBaseChange(e.target.value)}
-                  placeholder="Jaise: https://xxxx.ngrok-free.app/api"
-                />
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', lineHeight: '1.3' }}>
-                  💡 {language === 'hi'
-                    ? 'नोट: Vercel पर चलाने के लिए HTTPS होना ज़रूरी है। लोकल सर्वर को टनल करने के लिए ngrok चलाएं और उसका HTTPS URL यहाँ डालें।'
-                    : 'Note: Vercel requires HTTPS. For local testing on Vercel, run "ngrok http 3001" and paste the HTTPS URL here.'}
-                </span>
-              </div>
-            </details>
-          </div>
-
         </div>
       </div>
     </div>
