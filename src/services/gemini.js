@@ -142,58 +142,56 @@ export async function generateCustomChecklists(params, activities, lang = 'en') 
   // Map activities to a compact format for the LLM prompt
   const activityListText = activities.map(a => `- ${a.name} (ID: ${a.id})`).join('\n');
 
-  const prompt = `
-    System Context: You are a principal QA/QC (Quality Assurance / Quality Control) Construction Audit Director, Senior Structural Engineer, and Space Planner with 20+ years of active field experience in residential housing projects.
-    
-    Task: Customize and generate a highly rigorous, site-specific quality assurance checklist matching IS codes (Indian Standard Codes) and best engineering practices for the list of project activities.
-    
-    Site & Project Parameters:
-    - Soil Type: ${soilType} (Adjust foundations: e.g. Black Cotton Soil requires under-reamed piles or sand backfilling, Hard Murrum requires typical isolated footings).
-    - Construction Start Season: ${season} (Adjust curing & concrete casting instructions based on climate).
-    - Building Structure/Size: ${stories}
-    - Budget Tier: ${budget} (Standard vs Luxury finishes and inspection intervals).
-    
-    Activities list to audit:
-    ${activityListText}
-    
-    Instructions for generating Checklist Items:
-    For each activity ID in the input list, you MUST generate exactly 3 highly rigorous checkpoints:
-    1. Civil Engineering check (e.g., compaction, rebar detailing, concrete mix design, water-cement ratios, slump test, cover block verification, curing duration).
-    2. Architectural check (e.g., dimensional accuracy, setbacks, ventilation, column alignment, room heights, door/window frame clearance).
-    3. Interior Finishing check (e.g., surface preparation, plastering verticality, plumbing pressure tests, waterproofing gradient, electrical conduit routing, paint priming).
-    
-    Quality Reference Constraints:
-    - In the "rule" field, you MUST quote specific Indian Standard Codes (e.g., IS 456 for concrete, IS 1905 for masonry, IS 1200 for measurement, IS 269 for cement) and technical specs.
-    
-    Language Constraint:
-    - All text values in the JSON output ("text" and "rule" fields) MUST be written in the "${langName}" language. Use formal civil engineering terminology.
-    
-    Output Format:
-    Return ONLY a raw, valid JSON object matching the schema below. Do not wrap in markdown code blocks.
-    
-    JSON Schema:
+  const prompt = `You are a principal QA/QC (Quality Assurance / Quality Control) Construction Audit Director, Senior Structural Engineer, and Space Planner with 20+ years of active field experience in residential housing projects.
+
+Task: Customize and generate a highly rigorous, site-specific quality assurance checklist matching IS codes (Indian Standard Codes) and best engineering practices for the list of project activities.
+
+Site & Project Parameters:
+- Soil Type: ${soilType}
+- Construction Start Season: ${season}
+- Building Structure/Size: ${stories}
+- Budget Tier: ${budget}
+
+Activities list to audit:
+${activityListText}
+
+CRITICAL RULES FOR GENERATION:
+1. NO REPETITION: Every single activity ID must receive unique, highly specific checkpoints tailored to the EXACT name and phase of that activity. Do not repeat the same checkpoints or rules across different activities.
+2. DIVERSE PERSONAS & ROLES:
+   - For each activity, generate exactly 3 checkpoints:
+     - Checkpoint 1 (Civil Engineering Check): Focus on raw structural/engineering details like concrete grade (M20/M25), water-cement ratio, cover blocks, curing days, rebar lap length, slump test, or soil compaction.
+     - Checkpoint 2 (Architectural Check): Focus on spatial layout, clearance, bylaws, setbacks, column/wall alignment, light/ventilation, or ceiling heights.
+     - Checkpoint 3 (Interior & MEP Check): Focus on finishing quality, wall plastering verticality, plumbing pressure tests (e.g. 5-10 bar testing), waterproofing slope (1:100 gradient), conduit wiring paths, or paint primers.
+3. INDIAN STANDARD (IS) CODES:
+   - In the "rule" field, you MUST quote a specific, technically accurate Indian Standard Code (e.g., IS 456 for concrete, IS 1905 for masonry, IS 1200 for measurement, IS 269 for cement, IS 383 for aggregates, IS 2062 for steel) or professional construction specification.
+4. LANGUAGE CONSTRAINT:
+   - All text values in the JSON output ("text" and "rule" fields) MUST be written in the "${langName}" language. If in Hindi, use Devanagari script.
+
+Output ONLY a raw, valid JSON object matching the schema below. No markdown wrapping.
+
+JSON Schema:
+{
+  "activities": [
     {
-      "activities": [
+      "activityId": "string (matching the exact activity ID from the input list)",
+      "checkpoints": [
         {
-          "activityId": "string (matching the exact activity ID from the input list)",
-          "checkpoints": [
-            {
-              "text": "Civil QA check detail in ${langName}",
-              "rule": "IS Code or technical concrete standard in ${langName}"
-            },
-            {
-              "text": "Architectural alignment check detail in ${langName}",
-              "rule": "Architectural bylaw or dimensional standard in ${langName}"
-            },
-            {
-              "text": "Interior finishing/MEP QA check detail in ${langName}",
-              "rule": "Finishing/plumbing/electrical specification in ${langName}"
-            }
-          ]
+          "text": "Detailed Civil QA check in ${langName}",
+          "rule": "IS Code or technical concrete standard in ${langName}"
+        },
+        {
+          "text": "Detailed Architectural alignment check in ${langName}",
+          "rule": "Architectural bylaw or dimensional standard in ${langName}"
+        },
+        {
+          "text": "Detailed Interior/MEP QA check in ${langName}",
+          "rule": "Finishing/plumbing/electrical specification in ${langName}"
         }
       ]
     }
-  `;
+  ]
+}
+`;
 
   try {
     const rawJson = await callGemini(prompt, true);
@@ -215,58 +213,53 @@ export async function generateAIPredictiveSchedule(params, startStr, lang = 'en'
     return simulateAIPredictiveSchedule(params, lang);
   }
 
-  const prompt = `
-    System Context: You are a principal Project Scheduler, Construction Estimator, and Senior Civil Engineer with 20+ years of expertise in CPM/PERT scheduling and construction management.
-    
-    Task: Calculate duration multipliers and dependency relationships (concurrency and lag) for a G+${stories} construction project under specific site variables.
-    
-    Site Parameters:
-    - Soil Type: ${soilType} (E.g. Expansive Black Cotton Clay slows down foundation/substructure phases to 1.5x due to excavation difficulties and pile casting. Hard Murrum is fast).
-    - Start Season: ${season} (E.g. Monsoons completely stop excavation/foundation casting. Summer heat wave requires extreme curing but accelerates brickwork. Winter slows concrete setting).
-    - Budget Level: ${budget} (E.g. Luxury budget adds finishing layers and QA inspection lag, economy accelerates timelines using standard materials).
-    
-    Phases to analyze:
-    1. "Planning & Approvals"
-    2. "Site Setup"
-    3. "Substructure"
-    4. "Structure" (RCC column/slab casting)
-    5. "Walls" (Brickwork/plastering)
-    6. "Plumbing" (Piping/concealed drainage)
-    7. "Electrical" (Conduits/DB wiring)
-    8. "Flooring" (screed/tiles)
-    9. "Windows & Doors" (frames/fittings)
-    10. "Interiors" (false ceiling/joinery)
-    11. "Exterior Works" (facade/waterproofing/solar)
-    12. "Commissioning & Handover" (snagging/OC certificate)
-    
-    Instructions:
-    Determine:
-    - "durationMultiplier": Speed coefficient (0.80 to 2.00) based on site conditions.
-    - "relationship": "Sequential" (must wait for predecessor) or "Parallel" (can overlap).
-    - "overlapDays": Overlap lag duration (0 to 10 days) if Parallel.
-    - "civilAdvice", "architectAdvice", "interiorAdvice": Highly technical, code-compliant instructions in "${langName}".
-    
-    Language Constraint:
-    - All text descriptions (advice fields) MUST be in the "${langName}" language.
-    
-    Output Format:
-    Return ONLY a raw, valid JSON object matching the schema below. No markdown wrapping.
-    
-    JSON Schema:
+  const prompt = `You are a principal Project Scheduler, Senior Civil Engineer, and Chief Architect with 20+ years of active field experience in residential housing construction.
+
+Task: Calculate duration multipliers and concurrency relationships (Sequential vs Parallel with overlap lag) for a G+${stories} construction project under specific site parameters.
+
+Site Parameters:
+- Soil Type: ${soilType}
+- Start Season: ${season}
+- Budget Level: ${budget}
+
+Phases to analyze:
+1. "Planning & Approvals"
+2. "Site Setup"
+3. "Substructure"
+4. "Structure"
+5. "Walls"
+6. "Plumbing"
+7. "Electrical"
+8. "Flooring"
+9. "Windows & Doors"
+10. "Interiors"
+11. "Exterior Works"
+12. "Commissioning & Handover"
+
+CRITICAL INSTRUCTIONS FOR ADVISORIES:
+- "civilAdvice": Write a highly practical, technical civil engineering instruction (concrete grades, curing, compaction, rebar detailing) based on the soil "${soilType}" and season "${season}". Avoid generic advice.
+- "architectAdvice": Write a specific architectural clearance advice (setbacks, column locations, natural light/ventilation, room layouts, municipal bylaw compliance).
+- "interiorAdvice": Write an experienced interior finishing/MEP routing advice (concealed conduit paths, water pressure testing, flooring gradients, modular layout prep).
+- NO REPETITION: Do not write generic or repetitive text. Be highly specific to each phase.
+- LANGUAGE: Write the advisories strictly in the "${langName}" language. If in Hindi, use Devanagari script.
+
+Output ONLY a raw, valid JSON object matching this schema. No markdown formatting.
+
+JSON Schema:
+{
+  "phases": [
     {
-      "phases": [
-        {
-          "phaseName": "string (matching the exact phase name from the list above)",
-          "durationMultiplier": number,
-          "relationship": "Sequential" | "Parallel",
-          "overlapDays": number,
-          "civilAdvice": "Technical civil engineering advisory in ${langName}",
-          "architectAdvice": "Architectural clearance/sanction recommendation in ${langName}",
-          "interiorAdvice": "Interior finishes or MEP scheduling tip in ${langName}"
-        }
-      ]
+      "phaseName": "string (matching the exact phase name from the list above)",
+      "durationMultiplier": number (between 0.80 and 2.00 based on soil/season),
+      "relationship": "Sequential" | "Parallel",
+      "overlapDays": number (0 to 10 days if Parallel),
+      "civilAdvice": "Technical civil engineering advisory in ${langName}",
+      "architectAdvice": "Architectural clearance/sanction recommendation in ${langName}",
+      "interiorAdvice": "Interior finishes or MEP scheduling tip in ${langName}"
     }
-  `;
+  ]
+}
+`;
 
   try {
     const rawJson = await callGemini(prompt, true);
