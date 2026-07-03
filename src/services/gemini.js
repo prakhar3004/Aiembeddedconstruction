@@ -428,7 +428,7 @@ export async function askAdvisorQuestion(question, chatHistory = [], lang = 'en'
   `;
 
   try {
-    return await callGemini(prompt, false);
+    return await callGemini(prompt, false, 'groq');
   } catch (error) {
     console.error('Failed to run live chat, falling back to simulator:', error);
     return simulateAdvisorAnswer(question);
